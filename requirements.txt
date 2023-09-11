@@ -10,5 +10,5 @@ shapely
 SQLAlchemy
 streamlit
 streamlit_folium
-streamlit_aggrid==0.3.4.post3
-openpyxl==3.0.10
+streamlit-aggrid
+openpyxl
