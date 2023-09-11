@@ -1,0 +1,12 @@
+beautifulsoup4
+folium
+mapbox
+mysql_connector_repackaged
+mysql-connector-python
+pandas
+pdfcrowd
+requests
+shapely
+SQLAlchemy
+streamlit
+streamlit_folium
