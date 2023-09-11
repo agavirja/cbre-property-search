@@ -473,7 +473,7 @@ def main():
             
                 if isinstance(inmueble['imagen_principal'], str) and len(inmueble['imagen_principal'])>20: imagen_principal =  inmueble['imagen_principal']
                 else: imagen_principal = "https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/sin_imagen.png"
-                url_export   = f"https://cbre-property-search.streamlit.app/Ficha_del_inmueble?code={inmueble['code']}&tiponegocio={tiponegocio}" 
+                url_export   = f"https://cbre-property-search.streamlit.app/Ficha_del_inmueble?code={inmueble['id']}&tiponegocio={tiponegocio}" 
                 if pd.isnull(inmueble['direccion']): direccionlabel = '<p class="caracteristicas-info">&nbsp</p>'
                 else: direccionlabel = f'''<p class="caracteristicas-info">Dirección: {inmueble['direccion'][0:35]}</p>'''
                 
@@ -528,7 +528,7 @@ def main():
                 for i, inmueble in datamarket.iterrows():
                     if isinstance(inmueble['imagen_principal'], str) and len(inmueble['imagen_principal'])>20: imagen_principal =  inmueble['imagen_principal']
                     else: imagen_principal = "https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/sin_imagen.png"
-                    url_export   = f"https://cbre-property-search.streamlit.app/Ficha_del_inmueble?code={inmueble['code']}&tiponegocio={tiponegocio}" 
+                    url_export   = f"https://cbre-property-search.streamlit.app/Ficha_del_inmueble?code={inmueble['id']}&tiponegocio={tiponegocio}" 
                     string_popup = f'''
                     <!DOCTYPE html>
                     <html>
