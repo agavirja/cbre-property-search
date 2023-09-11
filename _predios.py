@@ -155,7 +155,7 @@ def main():
                       </head>
                       <body>
                           <div>
-                          <a href="http://localhost:8501/Analisis_de_predios?code={items['barmanpre']}" target="_blank">
+                          <a href="https://cbre-property-search.streamlit.app/Analisis_de_predios?code={items['barmanpre']}" target="_blank">
                           <div class="property-image">
                               <img src="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/cbre/ZOOM_LOTE.png"  alt="property image" onerror="this.src='https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/sin_imagen.png';">
                           </div>
@@ -473,7 +473,7 @@ def main():
             
                 if isinstance(inmueble['imagen_principal'], str) and len(inmueble['imagen_principal'])>20: imagen_principal =  inmueble['imagen_principal']
                 else: imagen_principal = "https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/sin_imagen.png"
-                url_export   = f"http://localhost:8501/Ficha_del_inmueble?code={inmueble['id']}&tiponegocio={tiponegocio}" 
+                url_export   = f"https://cbre-property-search.streamlit.app/Ficha_del_inmueble?code={inmueble['code']}&tiponegocio={tiponegocio}" 
                 if pd.isnull(inmueble['direccion']): direccionlabel = '<p class="caracteristicas-info">&nbsp</p>'
                 else: direccionlabel = f'''<p class="caracteristicas-info">Dirección: {inmueble['direccion'][0:35]}</p>'''
                 
@@ -528,7 +528,7 @@ def main():
                 for i, inmueble in datamarket.iterrows():
                     if isinstance(inmueble['imagen_principal'], str) and len(inmueble['imagen_principal'])>20: imagen_principal =  inmueble['imagen_principal']
                     else: imagen_principal = "https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/sin_imagen.png"
-                    url_export   = f"http://localhost:8501/Ficha_del_inmueble?code={inmueble['id']}&tiponegocio={tiponegocio}" 
+                    url_export   = f"https://cbre-property-search.streamlit.app/Ficha_del_inmueble?code={inmueble['code']}&tiponegocio={tiponegocio}" 
                     string_popup = f'''
                     <!DOCTYPE html>
                     <html>

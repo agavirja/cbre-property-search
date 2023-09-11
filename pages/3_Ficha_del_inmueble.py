@@ -44,7 +44,7 @@ def homogenizar_texto(texto):
 def getdata(code,tiponegocio):
     tabla  = f'data_market_{tiponegocio.lower()}_dpto_11'
     engine = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
-    return pd.read_sql_query(f"""SELECT  * FROM cbre.{tabla} WHERE id='{code}'""", engine)
+    return pd.read_sql_query(f"""SELECT  * FROM cbre.{tabla} WHERE code='{code}'""", engine)
 
 # obtener los argumentos de la url
 args = st.experimental_get_query_params()
