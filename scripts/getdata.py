@@ -27,7 +27,6 @@ def getdatacapital(polygon):
     query      = '(lotcodigo="'+'" OR lotcodigo="'.join(datapoints['lotcodigo'].unique())+'")'
     dataimport = pd.read_sql_query(f"SELECT lotcodigo as barmanpre, ST_AsText(geometry) as wkt FROM  bigdata.data_bogota_lotes WHERE {query}" , engine)
     query      = '(barmanpre="'+'" OR barmanpre="'.join(datapoints['lotcodigo'].unique())+'")'
-    
     # Remover vias
     datacatastro = pd.read_sql_query(f"SELECT  barmanpre  FROM  bigdata.data_bogota_catastro WHERE precdestin IN ('65','66') AND {query}" , engine)
     idd          = dataimport['barmanpre'].isin(datacatastro['barmanpre'])
@@ -149,8 +148,8 @@ def getinfopredioscapital(barmanpre):
         if searchby.empty is False:
             dataowner = getdataowner(list(searchby['nroIdentificacion'].unique()))
         if dataowner.empty is False:
-            datashd   = datashd.merge(dataowner,on='nroIdentificacion',how='left',validate='m:1')
-    
+            datashd   = datashd.merge(dataowner,on='nroIdentificacion',how='outer')
+        datashd = datashd.sort_values(by=['chip','vigencia','tipoPropietario','tipoDocumento'],ascending=False)
     
     datagrupada = groupcatastro(datacatastro)
     datalotes   = datalotes.merge(datagrupada,on='barmanpre',how='left',validate='m:1')
