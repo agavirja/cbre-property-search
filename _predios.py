@@ -92,7 +92,7 @@ def main():
             st.session_state[key] = value
     
     tiposdeinmuebles = tipoinmuebl2PrecUso()
-    
+
     col1, col2, col3 = st.columns([4,1,1])
     with col1:
         m = folium.Map(location=[st.session_state.latitud, st.session_state.longitud], zoom_start=st.session_state.zoom_start,tiles="cartodbpositron")
@@ -175,9 +175,13 @@ def main():
                     '''
                     folium.GeoJson(polyshape, style_function=style_lote).add_child(folium.Popup(popup_content)).add_to(m)
             
-    
         st_map = st_folium(m,width=1400,height=500)
-        
+
+        if st_map['last_clicked']:
+            if 'lat' in st_map['last_clicked'] and 'lng' in st_map['last_clicked']:
+                st.write(st_map['last_clicked']['lat'])
+                st.write(st_map['last_clicked']['lng'])
+                
         polygonType = ''
         if 'all_drawings' in st_map and st_map['all_drawings'] is not None:
             if st_map['all_drawings']!=[]:
@@ -478,7 +482,7 @@ def main():
                 else: direccionlabel = f'''<p class="caracteristicas-info">Dirección: {inmueble['direccion'][0:35]}</p>'''
                 
                 imagenes += f'''
-                <div class="col-xl-4 col-sm-6 mb-xl-2 mb-2">
+                <div class="col-xl-4 col-lg-4 col-md-6 col-sm-6 mb-xl-2 mb-2">
                   <div class="card h-100">
                     <div class="card-body p-3">
                       <a href="{url_export}" target="_blank">
@@ -486,13 +490,13 @@ def main():
                           <img src="{imagen_principal}" alt="property image" onerror="this.src='https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/sin_imagen.png';">
                         </div>
                       </a>
-                      <p class="price-info"><b>${inmueble[vardep]:,.0f}</b></h3>
+                      <p class="price-info"><b>${inmueble[vardep]:,.0f}</b></p>
                       {direccionlabel}
                       <p class="caracteristicas-info">{inmueble['tipoinmueble']}</p>
                       <p class="caracteristicas-info">Área construida: {inmueble['areaconstruida']}</p>
                     </div>
                   </div>
-                </div>            
+                </div>
                 '''
             texto = f"""
                 <!DOCTYPE html>
@@ -569,7 +573,7 @@ def main():
         <body>
         <div class="container-fluid py-1" style="margin-bottom: 30px;">
           <div class="row">
-            <div class="col-xl-12 col-sm-6 mb-xl-0 mb-2">
+            <div class="col-xl-12 col-sm-12 mb-xl-0 mb-2">
               <div class="card">
                 <div class="card-body p-3">
                   <div class="row">
@@ -694,8 +698,7 @@ def main():
         <body>
         <div class="container-fluid py-0" style="margin-bottom: 0px;">
           <div class="row">     
-          
-            <div class="col-xl-6 col-sm-0 mb-xl-0 mb-0">
+            <div class="col-md-12 col-lg-6 mb-3">
               <div class="card h-100">
                 <div class="card-body p-3">  
                   <div class="numbers">
@@ -707,7 +710,7 @@ def main():
               </div>
             </div>
             
-            <div class="col-xl-6 col-sm-0 mb-xl-0 mb-0">
+            <div class="col-md-12 col-lg-6 mb-3">
               <div class="card h-100">
                 <div class="card-body p-3">  
                   <div class="numbers">  
@@ -718,14 +721,13 @@ def main():
                 </div>
               </div>
             </div>
-
           </div>
         </div>
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-            <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
-            <script>
-            {graph}
-            </script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+        <script>
+        {graph}
+        </script>
         </body>
         </html>
         """
