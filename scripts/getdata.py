@@ -172,14 +172,16 @@ def getdatacapital_sdh(chip):
     
     query = ''
     if isinstance(chip, list):
-        query = '(chip="'+'" OR chip="'.join(chip)+'")'
+        query = "','".join(chip)
+        query = f" chip IN ('{query}')"
+
     elif isinstance(chip, str):
         query =  'chip="{chip}"'
 
     datashd = pd.DataFrame()
     if query!='':
         engine   = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
-        datashd  = pd.read_sql_query(f"SELECT * FROM bigdata.data_bogota_catastro_vigencia WHERE {query}" , engine)
+        datashd  = pd.read_sql_query(f"SELECT chip,vigencia,valorAutoavaluo,valorImpuesto FROM bigdata.data_bogota_catastro_vigencia WHERE {query}" , engine)
         engine.dispose()
         
     return datashd
@@ -381,6 +383,7 @@ def getdatasnr(polygon):
                 #-------------------------------------------------------------#
                 # Data completa                           
                 datacompleta = datadocid.merge(datapoints,on='matricula',how='outer')
+                dataprocesos = dataprocesos.groupby('docid').agg({'codigo':'first','nombre':'first','tarifa':'first','cuantia':'sum','fecha_documento_publico':'first','tipo_documento_publico':'first','numero_documento_publico':'first'}).reset_index()
                 datacompleta = datacompleta.merge(dataprocesos,on='docid',how='left',validate='m:1')
                 datacompleta['url'] =  datacompleta['docid'].apply(lambda x: f'https://radicacion.supernotariado.gov.co/app/static/ServletFilesViewer?docId={x}')
                 datacompleta.index  = range(len(datacompleta))

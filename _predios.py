@@ -238,8 +238,8 @@ def main():
         if st.session_state.datacatastro_origen.empty is False:
             precdestin_options = st.session_state.datacatastro_origen[st.session_state.datacatastro_origen['precdestin'].notnull()]['actividad'].unique()
             precuso_options    = st.session_state.datacatastro_origen[st.session_state.datacatastro_origen['precuso'].notnull()]['usosuelo'].unique()
-            precdestin_options = sorted(precdestin_options)
-            precuso_options    = sorted(precuso_options)
+            precdestin_options = sorted(map(str, precdestin_options))
+            precuso_options    = sorted(map(str, precuso_options))
             
                 
         with col2:
@@ -765,7 +765,7 @@ def main():
                     polyshape = wkt.loads(poly)
                     folium.GeoJson(polyshape, style_function=style_lote).add_to(m1)
                 with col1:
-                    st_map1 = st_folium(m1,width=1400,height=500)        
+                    st_map1 = st_folium(m1,width=600,height=500)        
         
         latitud,longitud = None,None
         if 'last_object_clicked' in st_map1 and st_map1['last_object_clicked']:
