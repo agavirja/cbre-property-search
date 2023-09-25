@@ -49,6 +49,7 @@ def getdatacapital(polygon):
             datacatastro.loc[idd,i] = 0
     datagrupada = groupcatastro(datacatastro)
     dataimport  = dataimport.merge(datagrupada,on='barmanpre',how='left',validate='m:1')
+    engine.dispose()
     
     # Data shd
     datashd      = getdatacapital_sdh(list(datacatastro['prechip'].unique()))
@@ -78,6 +79,7 @@ def getdatacapital(polygon):
     st.session_state.secion_filtro = True
     
     # Data market
+    engine              = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
     datamarket_venta    = pd.read_sql_query(f"SELECT id,direccion,available,	tipoinmueble,	areaconstruida,	valorventa,	valorarriendo,	latitud,	longitud,	inmobiliaria,	imagen_principal FROM  cbre.data_market_venta_dpto_11 WHERE ST_CONTAINS(ST_GEOMFROMTEXT('{polygon}'), geometry)" , engine)
     datamarket_arriendo = pd.read_sql_query(f"SELECT id,direccion,available,	tipoinmueble,	areaconstruida,	valorventa,	valorarriendo,	latitud,	longitud,	inmobiliaria,	imagen_principal FROM  cbre.data_market_arriendo_dpto_11 WHERE ST_CONTAINS(ST_GEOMFROMTEXT('{polygon}'), geometry)" , engine)
     
@@ -181,7 +183,7 @@ def getdatacapital_sdh(chip):
     datashd = pd.DataFrame()
     if query!='':
         engine   = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
-        datashd  = pd.read_sql_query(f"SELECT chip,vigencia,valorAutoavaluo,valorImpuesto FROM bigdata.data_bogota_catastro_vigencia WHERE {query}" , engine)
+        datashd  = pd.read_sql_query(f"SELECT chip,vigencia,valorAutoavaluo,valorImpuesto,direccionPredio,nroIdentificacion,indPago,idSoporteTributario FROM bigdata.data_bogota_catastro_vigencia WHERE {query}" , engine)
         engine.dispose()
         
     return datashd
