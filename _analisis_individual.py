@@ -32,7 +32,7 @@ def main():
     if code!='':
         datalotes, datacatastro,datashd,datainfopredios = getinfopredioscapital(code)
         
-        col1, col2 = st.columns(2)
+        col1, col2,col3 = st.columns([3,2,3])
         if datalotes.empty is False:
             
             with col1:
@@ -41,7 +41,12 @@ def main():
                 folium.GeoJson(polygon, style_function=style_lote).add_to(m)
                 st_map  = st_folium(m,width=600,height=500)
                 
-            with col2:
+            with col2:            
+                img = streetviewapi(latitud,longitud)
+                if img is not None:
+                    st.image(img)
+                    
+            with col3:
 
                 try: datalotes['estrato'] = datalotes['estrato'].astype(int)
                 except: pass
