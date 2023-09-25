@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, ColumnsAutoSizeMode
 import streamlit.components.v1 as components
 
-from scripts.getdata import getinfopredioscapital
+from scripts.getdata import getinfopredioscapital,streetviewapi
 
 def style_lote(feature):
     return {
@@ -42,7 +42,7 @@ def main():
                 st_map  = st_folium(m,width=600,height=500)
                 
             with col2:            
-                img = streetviewapi(latitud,longitud)
+                img = streetviewapi(polygon.centroid.y,polygon.centroid.x)
                 if img is not None:
                     st.image(img)
                     
