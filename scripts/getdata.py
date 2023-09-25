@@ -3,8 +3,10 @@ import pandas as pd
 import re
 import json
 import requests
+import shapely.wkt as wkt
 from sqlalchemy import create_engine 
 from shapely.geometry import Polygon,Point,mapping,shape
+from unidecode import unidecode
 import copy
 
 
@@ -85,6 +87,10 @@ def getdatacapital(polygon):
     st.session_state.datamarket       = pd.concat([datamarket_venta,datamarket_arriendo])
     st.session_state.datamarket.index = range(len(st.session_state.datamarket))
     engine.dispose()
+    
+    # Data SNR
+    getdatasnr(polygon)
+    
     st.experimental_rerun()
     
 @st.experimental_memo
@@ -251,9 +257,173 @@ def tipoinmuebl2PrecUso():
 # "https://oficinavirtual.shd.gov.co/barcode/certificacion?idSoporte={i['idSoporteTributario']}"
 
 
+#-----------------------------------------------------------------------------#
+# DATA SNR
+#-----------------------------------------------------------------------------#
+@st.experimental_memo
+def getdatasnr(polygon):
+    user     = st.secrets["user_bigdata"]
+    password = st.secrets["password_bigdata"]
+    host     = st.secrets["host_bigdata"]
+    schema   = st.secrets["schema_bigdata"]
+    
+    #polygon    = "POLYGON((-74.055990 4.691069, -74.056815 4.687229, -74.052107 4.686213, -74.051477 4.690352, -74.055990 4.691069))"
+    engine       = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
+    datapoints   = pd.read_sql_query(f"SELECT fecha_consulta,coddir,codigo,matricula,matricula_completa,direccion,oficinaSNR,latitud,longitud FROM  bigdata.snr_matricula_geometry WHERE ST_CONTAINS(ST_GEOMFROMTEXT('{polygon}'), POINT(longitud, latitud))" , engine)
+    datacompleta = pd.DataFrame()
+    if datapoints.empty is False:
+        datapoints = datapoints.sort_values(by=['fecha_consulta'],ascending=False).drop_duplicates(subset='matricula_completa')
 
+        query     = "','".join(datapoints['matricula'].astype(str).unique())
+        query     = f" value IN ('{query}') AND variable='matricula'"
+        datadocid = pd.read_sql_query(f"SELECT docid,value as matricula FROM  bigdata.snr_data_matricula WHERE {query}" , engine)
+        
+        #----------#
+        # ciudad 
+        query         = "','".join(datadocid['docid'].astype(str).unique())
+        query         = f" docid IN ('{query}')"
+        datatablacomp = pd.read_sql_query(f"SELECT docid,oficina FROM  bigdata.snr_data_completa WHERE {query}" , engine)
+        lng           = wkt.loads(polygon).centroid.x
+        lat           = wkt.loads(polygon).centroid.y
+        colombia_mpio = pd.read_sql_query(f"SELECT mpio_ccdgo FROM  bigdata.colombia_mpio WHERE ST_CONTAINS(geometry,POINT({lng},{lat}))" , engine)
+        
+        # D:\Dropbox\Empresa\Consultoria Data\GEORREFERENCIACION
+        data_cod_oficinas  = pd.read_pickle(r'D:\Dropbox\Empresa\Consultoria Data\SCRAPING DATA SNR RECURRENTE\oficina2codigoDANE')
+        data_cod_oficinas  = data_cod_oficinas[data_cod_oficinas['mpio_ccdgo'].isin(colombia_mpio['mpio_ccdgo'])]
+        if data_cod_oficinas.empty is False:
+            data_cod_oficinas['oficina'] = data_cod_oficinas['oficina'].apply(lambda x: x.lower())
+            idd           = datatablacomp['oficina'].isin(data_cod_oficinas['oficina'])
+            datatablacomp = datatablacomp[idd]
+            idd           = datadocid['docid'].isin(datatablacomp['docid'])
+            datadocid     = datadocid[idd]
+        #----------#
+        
+        if datadocid.empty is False:
+            datadocid    = datadocid.drop_duplicates()
+            query        = "','".join(datadocid['docid'].astype(str).unique())
+            # 125,168,169  #"COMPRAVENTA","TRANSFERENCIA DE DOMINIO A TITULO DE LEASING","TRANSFERENCIA DE DOMINIO A TITULO DE LEASING HABITACIONAL DE VIVIENDA"
+            query        = f" docid IN ('{query}') AND codigo IN ('125','168','169')"
+            dataprocesos = pd.read_sql_query(f"SELECT docid,codigo,nombre,tarifa,cuantia FROM  bigdata.snr_tabla_procesos WHERE {query}" , engine)
+            if dataprocesos.empty is False:
+                dataprocesos = dataprocesos.drop_duplicates(subset=['docid','tarifa','cuantia'])
+                query        = "','".join(dataprocesos['docid'].astype(str).unique())
+                query        = f" docid IN ('{query}')"
+                datatable    = pd.read_sql_query(f"SELECT docid, fecha_documento_publico,tipo_documento_publico, numero_documento_publico FROM  bigdata.snr_data_completa WHERE {query}" , engine)
+                if datatable.empty is False:
+                    datatable    = datatable.drop_duplicates(subset='docid')
+                    dataprocesos = dataprocesos.merge(datatable,on='docid',how='left',validate='m:1')
+                    dataprocesos['fecha_documento_publico'] = pd.to_datetime(dataprocesos['fecha_documento_publico'],errors='coerce')
+                    idd           = dataprocesos['fecha_documento_publico'].isnull()
+                    if sum(idd)>0:
+                        query         = "','".join(dataprocesos[idd]['docid'].astype(str).unique())
+                        query         = f" docid IN ('{query}')"
+                        datatabledate = pd.read_sql_query(f"SELECT docid,documento_json FROM  bigdata.snr_data_completa WHERE {query}" , engine)
+                        datatabledate['fechanotnull'] = datatabledate['documento_json'].apply(lambda x: getEXACTfecha(x))
+                        datatabledate = datatabledate.drop_duplicates(subset='docid',keep='first')
+                        formato_fecha = '%d-%m-%Y'
+                        datatabledate['fechanotnull'] = pd.to_datetime(datatabledate['fechanotnull'],format=formato_fecha,errors='coerce')
+                        dataprocesos  = dataprocesos.merge(datatabledate[['docid','fechanotnull']],how='left',validate='m:1')
+                        idd = (dataprocesos['fecha_documento_publico'].isnull()) & (dataprocesos['fechanotnull'].notnull())
+                        if sum(idd)>0:
+                            dataprocesos.loc[idd,'fecha_documento_publico'] = dataprocesos.loc[idd,'fechanotnull']
+                        dataprocesos.drop(columns=['fechanotnull'],inplace=True)
+                            
+                        
+                idd          = datadocid['docid'].isin(dataprocesos['docid'])
+                datadocid    = datadocid[idd]
+                idd          = datapoints['matricula'].isin(datadocid['matricula'])
+                datapoints   = datapoints[idd]
+                datapoints.index    = range(len(datapoints))
+                datapoints['merge'] = range(len(datapoints))
+                
+                #-------------------------------------------------------------#
+                # Data Bogota
+                idd = datapoints['oficinaSNR'].str.contains('BOGOTA')
+                if sum(idd)>0:
+                    datamerge     = datapoints[idd]
+                    query         = "','".join(datamerge['direccion'].astype(str).unique())
+                    query         = f" predirecc IN ('{query}')"
+                    datacatastro  = pd.read_sql_query(f"SELECT predirecc as direccion,prechip as chip,preaconst, preaterre,prevetustz, precuso, precdestin, barmanpre FROM  bigdata.data_bogota_catastro WHERE {query}" , engine)
+                    datamerge     = datamerge.merge(datacatastro,on='direccion',how='outer') 
+                    
+                    idd = datamerge['chip'].isnull()
+                    if sum(idd)>0:
+                        query       = "','".join(datamerge[idd]['matricula'].astype(str).unique())
+                        query       = f" numeroMatriculaInmobiliaria IN ('{query}')"
+                        datapredios = pd.read_sql_query(f"SELECT numeroMatriculaInmobiliaria as matricula, numeroChip as chip FROM  bigdata.data_bogota_catastro_predio WHERE {query}" , engine)
+                        if datapredios.empty is False:
+                            query        = "','".join(datapredios['chip'].astype(str).unique())
+                            query        = f" prechip IN ('{query}')"                            
+                            datacatastro = pd.read_sql_query(f"SELECT prechip as chip, preaconst, preaterre,prevetustz, precuso, precdestin, barmanpre FROM  bigdata.data_bogota_catastro WHERE {query}" , engine)
+                            datapredios  = datapredios.merge(datacatastro,on='chip',how='outer')
+                            rr = {}
+                            for i in datapredios.columns:
+                                if 'matricula' not in i:
+                                    rr.update({i:f'{i}_new'})
+                            datapredios.rename(columns=rr,inplace=True)
+                            datamerge     = datamerge.merge(datapredios,on='matricula',how='outer') 
+                            for i in ['chip', 'preaconst', 'preaterre', 'prevetustz', 'precuso', 'precdestin']:
+                                idd = (datamerge[i].isnull()) & (datamerge[f'{i}_new'].notnull())
+                                if sum(idd)>0:
+                                    datamerge.loc[idd,i] = datamerge.loc[idd,f'{i}_new']
+                                del datamerge[f'{i}_new']
+                            datapoints = datapoints.merge(datamerge[['merge', 'chip', 'preaconst', 'preaterre', 'prevetustz', 'precuso', 'precdestin','barmanpre']],on='merge',how='left',validate='1:1')
+                            del datapoints['merge']
+                            
+                            dataprecuso,dataprecdestin = getuso_destino()
+                            dataprecuso.rename(columns={'codigo':'precuso','tipo':'usosuelo','descripcion':'desc_usosuelo'},inplace=True)
+                            dataprecdestin.rename(columns={'codigo':'precdestin','tipo':'actividad','descripcion':'desc_actividad'},inplace=True)
+                            datapoints = datapoints.merge(dataprecuso,on='precuso',how='left',validate='m:1')
+                            datapoints = datapoints.merge(dataprecdestin,on='precdestin',how='left',validate='m:1')
+                            datapoints['formato_direccion'] = datapoints['direccion'].apply(lambda x: formato_direccion(x))
 
-
+                #-------------------------------------------------------------#
+                # Data completa                           
+                datacompleta = datadocid.merge(datapoints,on='matricula',how='outer')
+                datacompleta = datacompleta.merge(dataprocesos,on='docid',how='left',validate='m:1')
+                datacompleta['url'] =  datacompleta['docid'].apply(lambda x: f'https://radicacion.supernotariado.gov.co/app/static/ServletFilesViewer?docId={x}')
+                datacompleta.index  = range(len(datacompleta))
+                
+    st.session_state.datasnr_origen = copy.deepcopy(datacompleta)
+    st.session_state.datasnr        = copy.deepcopy(datacompleta)
+    engine.dispose()
+                
+def getEXACTfecha(x):
+    result = None
+    try:
+        x = json.loads(x)
+        continuar = 0
+        for i in ['fecha','fecha:','fecha expedicion','fecha expedicion:','fecha recaudo','fecha recaudo:']:
+            for j in x:
+                if i==re.sub('\s+',' ',unidecode(j['value'].lower())):
+                    posicion = x.index(j)
+                    result   = x[posicion+1]['value']
+                    continuar = 1
+                    break
+            if continuar==1:
+                break
+    except: result = None
+    if result is None:
+        result = getINfecha(x)
+    return result
+    
+def getINfecha(x):
+    result = None
+    try:
+        x = json.loads(x)
+        continuar = 0
+        for i in ['fecha','fecha:','fecha expedicion','fecha expedicion:','fecha recaudo','fecha recaudo:']:
+            for j in x:
+                if i in re.sub('\s+',' ',unidecode(j['value'].lower())):
+                    posicion = x.index(j)
+                    result   = x[posicion+1]['value']
+                    continuar = 1
+                    break
+            if continuar==1:
+                break
+    except: result = None
+    return result
+ 
 #-----------------------------------------------------------------------------#
 # DATA DANE
 #-----------------------------------------------------------------------------#

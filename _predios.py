@@ -1,17 +1,18 @@
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine 
-from shapely.geometry import Polygon,Point,mapping,shape
 import shapely.wkt as wkt
-import copy
-
 import folium
 import streamlit.components.v1 as components
+import matplotlib.pyplot as plt
 from streamlit_folium import st_folium
 from folium.plugins import Draw
 from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
+from sqlalchemy import create_engine 
+from shapely.geometry import Polygon,Point,mapping,shape
 
-from scripts.getdata import getdatacapital,getuso_destino,getdatacapital_sdh,censodane,tipoinmuebl2PrecUso
+
+from scripts.getdata import getdatacapital,getuso_destino,getdatacapital_sdh,getdatasnr,censodane,tipoinmuebl2PrecUso
 
 def funfiltros(filtros):
     if st.session_state.datacatastro_origen.empty is False and filtros!=[]:
@@ -40,7 +41,7 @@ def funfiltros(filtros):
         # Data de lotes con filtro
         idd = st.session_state.datalotes_origen['barmanpre'].isin(st.session_state.datacatastro_origen[idd]['barmanpre'])
         st.session_state.datalotes = st.session_state.datalotes_origen[idd]
-        
+                
         st.experimental_rerun()
 
 def style_function(feature):
@@ -82,7 +83,9 @@ def main():
                'datacatastro':pd.DataFrame(),
                'datacatastro_origen':pd.DataFrame(),
                'datashd':pd.DataFrame(),
-               'datashd_origen':pd.DataFrame(),    
+               'datashd_origen':pd.DataFrame(),   
+               'datasnr_origen':pd.DataFrame(),
+               'datasnr':pd.DataFrame(),
                'datamarket':pd.DataFrame(),                 
                'secion_filtro':False,
                }
@@ -179,8 +182,8 @@ def main():
 
         if st_map['last_clicked']:
             if 'lat' in st_map['last_clicked'] and 'lng' in st_map['last_clicked']:
-                st.write(st_map['last_clicked']['lat'])
-                st.write(st_map['last_clicked']['lng'])
+                lat_select = st_map['last_clicked']['lat']
+                lng_select = st_map['last_clicked']['lng']
                 
         polygonType = ''
         if 'all_drawings' in st_map and st_map['all_drawings'] is not None:
@@ -386,7 +389,7 @@ def main():
                 <div class="card-body p-3">
                   <div class="row">
                     <div class="numbers">
-                      <h3 class="font-weight-bolder mb-0" style="text-align: center;font-size: 1.5rem;">Ofertas de predios</h3>
+                      <h3 class="font-weight-bolder mb-0" style="text-align: center;font-size: 1.5rem;">Oferta de inmuebles</h3>
                     </div>
                   </div>
                 </div>
@@ -558,6 +561,229 @@ def main():
                 st_map1 = st_folium(m1,width=500,height=700)
                 
             
+    #-------------------------------------------------------------------------#
+    # Data super notariado y registro
+    #-------------------------------------------------------------------------#             
+    if st.session_state.datasnr_origen.empty is False:
+        html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-icons.css" rel="stylesheet" />
+          <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-svg.css" rel="stylesheet" />
+          <link id="pagestyle" href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/soft-ui-dashboard.css?v=1.0.7" rel="stylesheet" />
+        </head>
+        <body>
+        <div class="container-fluid py-1" style="margin-bottom: 30px;">
+          <div class="row">
+            <div class="col-xl-12 col-sm-6 mb-xl-0 mb-2">
+              <div class="card">
+                <div class="card-body p-3">
+                  <div class="row">
+                    <div class="numbers">
+                      <h3 class="font-weight-bolder mb-0" style="text-align: center;font-size: 1.5rem;">Inmuebles vendidos</h3>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </body>
+        </html>        
+        """
+        texto = BeautifulSoup(html, 'html.parser')
+        st.markdown(texto, unsafe_allow_html=True)
+        #getdatasnr(str(st.session_state.polygonfilter))
+        
+        df = st.session_state.datasnr_origen[['docid','fecha_documento_publico','cuantia','precuso']]
+        if precusofilter_tipoinmueble!=[]:
+            idd = df['precuso'].isin(precusofilter_tipoinmueble)
+            df  = df[idd]
+        
+        df         = df.sort_values(by=['docid','cuantia'],ascending=False).drop_duplicates(subset='docid',keep='first')
+        df         = df[['fecha_documento_publico','cuantia']]
+        df         = df.set_index(['fecha_documento_publico'])
+        g          = df.groupby(pd.Grouper(freq='Y'))
+        d1         = g.count()
+        d1.columns = ['transacciones']
+        d2         = g.sum()
+        d2.columns = ['valor']
+        df         = d1.merge(d2,left_index=True, right_index=True)
+        df['year'] = df.index.year
+        
+        conteo    = 0
+        graph     = ""
+        colorgen  = ['rgba(0, 63, 45, 0.9)', 'rgba(0, 73, 53, 0.7)', 'rgba(0, 83, 61, 0.5)', 'rgba(0, 93, 69, 0.3)', 'rgba(0, 103, 77, 0.1)']
+        coloredad = ['rgba(0, 0, 128, 0.8)', 'rgba(0, 0, 139, 0.8)', 'rgba(0, 0, 205, 0.8)', 'rgba(65, 105, 225, 0.8)', 'rgba(70, 130, 180, 0.8)', 'rgba(135, 206, 235, 0.8)', 'rgba(173, 216, 230, 0.8)', 'rgba(240, 248, 255, 0.8)', 'rgba(255, 255, 255, 0.8)']
+        
+        lista = [
+            {'labels':df['year'].to_list(),'values':df['transacciones'].to_list(),'titulo':'Número de transacciones por año','colors':colorgen},
+            {'labels':df['year'].to_list(),'values':df['valor'].to_list(),'titulo':'Valor de las transacciones por año','colors':coloredad},
+                 ]
+        
+        for item in lista:
+            conteo     += 1
+
+            graph += f'''
+            const labels{conteo} = {item['labels']};
+            const data{conteo} = {item['values']};
+            const backgroundColors{conteo} =  {item['colors']};
+            const ctx{conteo} = document.getElementById('chart{conteo}').getContext('2d');
+            
+            new Chart(ctx{conteo}, {{
+                type: 'bar',
+                data: {{
+                    labels: labels{conteo},
+                    datasets: [{{
+                        label: '{item['titulo']}',
+                        data: data{conteo},
+                        backgroundColor: backgroundColors{conteo},
+                        borderWidth: 0
+                    }}]
+                }},
+                options: {{                   
+                    scales: {{
+                        x: {{
+                            grid: {{
+                                display: false
+                            }}
+                        }},
+                        y: {{
+                            beginAtZero: true,
+                            ticks: {{
+                                callback: function(value) {{
+                                    return value;
+                                }}
+                            }}
+                        }}
+                    }},
+                    plugins: {{
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    return context.parsed.y;
+                                }}
+                            }}
+                        }},
+                        datalabels: {{
+                            anchor: 'end', 
+                            align: 'end', 
+                            font: {{ size: 12, weight: 'bold' }}, 
+                            color: 'black', 
+                            formatter: function(value) {{
+                                return value; // Esta función muestra el valor de la barra
+                            }}                            
+                        }}
+                    }}
+                }}
+            }});
+            '''
+        graph = BeautifulSoup(graph, 'html.parser')
+        style = """
+        <style>
+            .chart-container {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100%;
+              width: 100%; 
+              margin-top:100px;
+            }
+            body {
+                font-family: Arial, sans-serif;
+            }
+            
+            canvas {
+                max-width: 100%;
+                max-height: 100%;
+                max-height: 300px;
+            }
+        </style>
+        """
+        html = f"""
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-icons.css" rel="stylesheet" />
+            <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-svg.css" rel="stylesheet" />
+            <link id="pagestyle" href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/soft-ui-dashboard.css?v=1.0.7" rel="stylesheet" />
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            {style}
+        </head>
+        <body>
+        <div class="container-fluid py-0" style="margin-bottom: 0px;">
+          <div class="row">     
+            <div class="col-md-12 col-lg-6 mb-3">
+              <div class="card h-100">
+                <div class="card-body p-3">  
+                  <div class="numbers">
+                    <div class="chart chart-container">
+                      <canvas id="chart1"></canvas>
+                    </div> 
+                  </div>                      
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-12 col-lg-6 mb-3">
+              <div class="card h-100">
+                <div class="card-body p-3">  
+                  <div class="numbers">  
+                    <div class="chart chart-container">
+                      <canvas id="chart2"></canvas>
+                    </div> 
+                  </div>                     
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+        <script>
+        {graph}
+        </script>
+        </body>
+        </html>
+        """
+        st.components.v1.html(html, height=500)
+
+        col1,col2 = st.columns([2,3])
+        if  st.session_state.datalotes.empty is False:
+            df = st.session_state.datasnr_origen[['docid','fecha_documento_publico','cuantia','precuso','barmanpre']]
+            if precusofilter_tipoinmueble!=[]:
+                idd = df['precuso'].isin(precusofilter_tipoinmueble)
+                df  = df[idd]
+            idd = st.session_state.datalotes['barmanpre'].isin(df['barmanpre'])
+            
+            if sum(idd)>0:
+                m1 = folium.Map(location=[st.session_state.latitud, st.session_state.longitud], zoom_start=st.session_state.zoom_start,tiles="cartodbpositron")
+                for _,items in st.session_state.datalotes[idd].iterrows():
+                    poly      = items['wkt']
+                    polyshape = wkt.loads(poly)
+                    folium.GeoJson(polyshape, style_function=style_lote).add_to(m1)
+                with col1:
+                    st_map1 = st_folium(m1,width=1400,height=500)        
+        
+        latitud,longitud = None,None
+        if 'last_object_clicked' in st_map1 and st_map1['last_object_clicked']:
+            if 'lat' in st_map1['last_object_clicked'] and 'lng' in st_map1['last_object_clicked']:
+                latitud  = st_map1['last_object_clicked']['lat']
+                longitud = st_map1['last_object_clicked']['lng']
+        if longitud is not None and latitud is not None:
+            idd = st.session_state.datalotes['wkt'].apply(lambda x: wkt.loads(x).contains( Point(longitud,latitud)))
+            if sum(idd)>0:
+                with col2:
+                    idd = st.session_state.datasnr_origen['barmanpre']==st.session_state.datalotes[idd]['barmanpre'].iloc[0]
+                    df  = st.session_state.datasnr_origen[idd]
+                    df  = df.sort_values(by=['fecha_documento_publico'],ascending=False)
+                    df['grupo'] = pd.factorize(df['docid'])[0] + 1
+                    df          = df.sort_values(by=['grupo','fecha_documento_publico','cuantia'],ascending=[True,False,False])
+                    df.index = range(len(df))
+                    df = df[['grupo','fecha_documento_publico','direccion','matricula_completa','chip','preaconst','actividad','nombre','tarifa','cuantia','tipo_documento_publico','numero_documento_publico','url']]
+                    st.dataframe(df)
     #-------------------------------------------------------------------------#
     # Data censo del dane
     #-------------------------------------------------------------------------#  
