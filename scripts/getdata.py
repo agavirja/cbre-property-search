@@ -288,7 +288,8 @@ def getdatasnr(polygon):
         colombia_mpio = pd.read_sql_query(f"SELECT mpio_ccdgo FROM  bigdata.colombia_mpio WHERE ST_CONTAINS(geometry,POINT({lng},{lat}))" , engine)
         
         # D:\Dropbox\Empresa\Consultoria Data\GEORREFERENCIACION
-        data_cod_oficinas  = pd.read_pickle(r'D:\Dropbox\Empresa\Consultoria Data\SCRAPING DATA SNR RECURRENTE\oficina2codigoDANE')
+        #data_cod_oficinas  = pd.read_pickle(r'D:\Dropbox\Empresa\Consultoria Data\SCRAPING DATA SNR RECURRENTE\oficina2codigoDANE')
+        data_cod_oficinas  = pd.read_pickle('data/oficina2codigoDANE')
         data_cod_oficinas  = data_cod_oficinas[data_cod_oficinas['mpio_ccdgo'].isin(colombia_mpio['mpio_ccdgo'])]
         if data_cod_oficinas.empty is False:
             data_cod_oficinas['oficina'] = data_cod_oficinas['oficina'].apply(lambda x: x.lower())

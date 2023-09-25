@@ -261,8 +261,6 @@ def main():
         """        
         st.components.v1.html(html, height=500)        
 
-
-
         conteo    = 0
         graph     = ""
         
