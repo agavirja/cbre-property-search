@@ -986,44 +986,46 @@ def main():
     #-------------------------------------------------------------------------#  
 
     col1, col2 = st.columns(2)
-    with col1:
-        csv = convert_df(st.session_state.datashd_origen)     
-        st.download_button(
-           "Descargar datos de propietarios",
-           csv,
-           "data_propietarios.csv",
-           "text/csv",
-           key='data_propietarios'
-        )
-        components.html(
+    if st.session_state.datashd_origen.empty is False:
+        with col1:
+            csv = convert_df(st.session_state.datashd_origen)     
+            st.download_button(
+               "Descargar datos de propietarios",
+               csv,
+               "data_propietarios.csv",
+               "text/csv",
+               key='data_propietarios'
+            )
+            components.html(
+                """
+            <script>
+            const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
+            elements[0].style.width = '100%';
+            elements[0].style.fontWeight = 'bold';
+            elements[0].style.backgroundColor = '#17e88f';
+            </script>
             """
-        <script>
-        const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-        elements[0].style.width = '100%';
-        elements[0].style.fontWeight = 'bold';
-        elements[0].style.backgroundColor = '#17e88f';
-        </script>
-        """
-        )
-    with col2:
-        csv = convert_df(st.session_state.datasnr_origen)     
-        st.download_button(
-           "Descargar datos de transacciones",
-           csv,
-           "data_transacciones.csv",
-           "text/csv",
-           key='data_transacciones'
-        )
-        components.html(
+            )
+    if st.session_state.datasnr_origen.empty is False:
+        with col2:
+            csv = convert_df(st.session_state.datasnr_origen)     
+            st.download_button(
+               "Descargar datos de transacciones",
+               csv,
+               "data_transacciones.csv",
+               "text/csv",
+               key='data_transacciones'
+            )
+            components.html(
+                """
+            <script>
+            const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
+            elements[1].style.width = '100%';
+            elements[1].style.fontWeight = 'bold';
+            elements[1].style.backgroundColor = '#17e88f';
+            </script>
             """
-        <script>
-        const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-        elements[1].style.width = '100%';
-        elements[1].style.fontWeight = 'bold';
-        elements[1].style.backgroundColor = '#17e88f';
-        </script>
-        """
-        )        
+            )        
         
     #if st.session_state.datacatastro.empty is False:
     #    st.dataframe(st.session_state.datacatastro)
