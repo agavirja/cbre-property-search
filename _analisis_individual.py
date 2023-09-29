@@ -4,7 +4,7 @@ import folium
 import shapely.wkt as wkt
 from streamlit_folium import st_folium
 from bs4 import BeautifulSoup
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, ColumnsAutoSizeMode
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, ColumnsAutoSizeMode, AgGridTheme
 import streamlit.components.v1 as components
 
 from scripts.getdata import getinfopredioscapital,streetviewapi
@@ -47,10 +47,21 @@ def main():
                     st.image(img)
                     
             with col3:
-
-                try: datalotes['estrato'] = datalotes['estrato'].astype(int)
+                try:
+                    datalotes['estrato'] = pd.to_numeric(datalotes['estrato'],errors='coerce')
+                    idd = datalotes['estrato'].notnull()
+                    if sum(idd)>0:
+                        datalotes.loc[idd,'estrato'] = datalotes.loc[idd,'estrato'].astype(int)
+                    idd = datalotes['estrato'].isnull()
+                    if sum(idd)>0:
+                        datalotes.loc[idd,'estrato'] = 'No aplica'
                 except: pass
-                    
+                try:  datalotes['areaconstruida'] = datalotes['areaconstruida'].apply(lambda x: round(x, 2))
+                except: pass
+                try:  datalotes['areaterreno'] = datalotes['areaterreno'].apply(lambda x: round(x, 2))
+                except: pass                    
+                
+                
                 formato = {
                     'direccion': 'Dirección',
                     'barrio': 'Barrio',
@@ -131,8 +142,8 @@ def main():
         v2.columns = ['actividad','value']      
 
         lista = [
-            {'labels':v1['usosuelo'].to_list(),'values':v1['value'].to_list(),'titulo':'# predios por uso de suelo','colors':['rgba(0, 63, 45, 0.5)']},
-            {'labels':v2['actividad'].to_list(),'values':v2['value'].to_list(),'titulo':'# de predios por actividad del predio','colors':['rgba(0, 63, 45, 0.5)']},
+            {'labels':v1['usosuelo'].to_list(),'values':v1['value'].to_list(),'titulo':'# predios por uso de suelo','colors':['#012a2d']},
+            {'labels':v2['actividad'].to_list(),'values':v2['value'].to_list(),'titulo':'# de predios por actividad del predio','colors':['#80bbad']},
                  ]
         
         for item in lista:
@@ -274,7 +285,7 @@ def main():
         v1 = v1[v1['value']>0]
         
         lista = [
-            {'labels':v1['rangoarea'].to_list(),'values':v1['value'].to_list(),'titulo':'# de predios por rango de área','colors':['rgba(0, 63, 45, 0.5)']},
+            {'labels':v1['rangoarea'].to_list(),'values':v1['value'].to_list(),'titulo':'# de predios por rango de área','colors':['#012a2d']},
                  ]
         
         for item in lista:
@@ -437,22 +448,22 @@ def main():
         dataselec = dataselec[['predirecc','preaterre','preaconst','avaluocatastral','predial','prechip','matricula','cedulacatastral','actividad','usosuelo']]
         dataselec.columns = ['Dirección','Área de terreno','Área construida','Avalúo catastral','Predial','Chip','Matrícula','Cédula catastral','Actividad','Uso del suelo']
         gb = GridOptionsBuilder.from_dataframe(dataselec)
-        gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True, resizable=True,filterable=True,sortable=True,)
-        gb.configure_selection(selection_mode="single", use_checkbox=True) # "multiple"
-        gb.configure_side_bar(filters_panel=False,columns_panel=False)
-        gridoptions = gb.build()
-        
+ 
+        gb.configure_default_column(cellStyle={'color': 'grey', 'font-size': '20px'}, resizable=True,filterable=True,sortable=True,suppressMenu=True, wrapHeaderText=True, autoHeaderHeight=True)
+        custom_css = {".ag-header-cell-text": {"font-size": "20px", 'text-overflow': 'revert;', 'font-weight': 700, 'text-align':'center'},
+              ".ag-theme-streamlit": {'transform': "scale(0.8)", "transform-origin": '0 0'}}
+        gb.configure_selection(selection_mode="single", use_checkbox=True)
+        gridOptions = gb.build()       
+
         response_close = AgGrid(
             dataselec,
             height=500,
-            gridOptions=gridoptions,
-            enable_enterprise_modules=False,
-            update_mode=GridUpdateMode.MODEL_CHANGED,
-            data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-            fit_columns_on_grid_load=True,
-            header_checkbox_selection_filtered_only=False,
-            columns_auto_size_mode=ColumnsAutoSizeMode.FIT_ALL_COLUMNS_TO_VIEW,
-            use_checkbox=True)
+            gridOptions=gridOptions,
+            custom_css=custom_css,
+            columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS,
+            use_checkbox=True,
+            theme=AgGridTheme.STREAMLIT,
+            )
         
         if response_close['selected_rows']:
             datapaso         = dataselec[dataselec['Dirección']==response_close['selected_rows'][0]['Dirección']]
@@ -637,13 +648,14 @@ def main():
                    "text/csv",
                    key='data_contacto_info'
                 )
-        components.html(
-            """
-        <script>
-        const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-        elements[0].style.width = '100%';
-        elements[0].style.fontWeight = 'bold';
-        </script>
-        """
-        )
+                components.html(
+                    """
+                <script>
+                const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
+                elements[0].style.width = '100%';
+                elements[0].style.fontWeight = 'bold';
+                elements[0].style.backgroundColor = '#17e88f';
+                </script>
+                """
+                )
                 

@@ -72,6 +72,9 @@ def number2text(x):
         except: pass
     return result
 
+def convert_df(df):
+   return df.to_csv(index=False).encode('utf-8')
+
 def main():
     formato = {
                'polygonfilter':None,
@@ -85,7 +88,6 @@ def main():
                'datashd':pd.DataFrame(),
                'datashd_origen':pd.DataFrame(),   
                'datasnr_origen':pd.DataFrame(),
-               'datasnr':pd.DataFrame(),
                'datamarket':pd.DataFrame(),                 
                'secion_filtro':False,
                }
@@ -107,6 +109,7 @@ def main():
         draw.add_to(m)
         
         if st.session_state.polygonfilter is not None:
+            st.write(str(st.session_state.polygonfilter))
             geojson_data                = mapping(st.session_state.polygonfilter)
             polygon_shape               = shape(geojson_data)
             centroid                    = polygon_shape.centroid
@@ -132,16 +135,23 @@ def main():
                     poly      = items['wkt']
                     polyshape = wkt.loads(poly)
  
-                    pop_actividad = "<b>Actividad del predio:</b><br>"
-                    for j in items['actividad']:
-                        pop_actividad += f"""
-                        &bull; {j}<br>
-                        """
-                    pop_usosuelo = "<b>Uso del suelo:</b><br>"
-                    for j in items['usosuelo']:
-                        pop_usosuelo += f"""
-                        &bull; {j}<br>
-                        """          
+                    pop_actividad = ""
+                    pop_usosuelo  = "" 
+                    if items['actividad'] is not None:
+                        if isinstance(items['actividad'], list):
+                            pop_actividad = "<b>Actividad del predio:</b><br>"
+                            for j in items['actividad']:
+                                pop_actividad += f"""
+                                &bull; {j}<br>
+                                """
+                                
+                    if items['usosuelo'] is not None:
+                        if isinstance(items['usosuelo'], list):
+                            pop_usosuelo = "<b>Uso del suelo:</b><br>"
+                            for j in items['usosuelo']:
+                                pop_usosuelo += f"""
+                                &bull; {j}<br>
+                                """          
                     try:
                         if items['antiguedad_min']<items['antiguedad_max']:
                             antiguedad = f"<b> Antiguedad:</b> {items['antiguedad_min']}-{items['antiguedad_max']}<br>"
@@ -301,9 +311,11 @@ def main():
             """
         <script>
         const elements = window.parent.document.querySelectorAll('.stButton button')
-        elements[0].style.backgroundColor = 'lightblue';
+        elements[0].style.backgroundColor = '#003f2d';
         elements[0].style.fontWeight = 'bold';
+        elements[0].style.color = 'white';
         elements[0].style.width = '100%';
+        elements[1].style.backgroundColor = '#cad1d3';
         elements[1].style.width = '100%';
         </script>
         """
@@ -485,7 +497,7 @@ def main():
                 else: direccionlabel = f'''<p class="caracteristicas-info">Dirección: {inmueble['direccion'][0:35]}</p>'''
                 
                 imagenes += f'''
-                <div class="col-xl-4 col-lg-4 col-md-6 col-sm-6 mb-xl-2 mb-2">
+                <div class="col-xl-6 col-lg-6 col-md-6 col-sm-6 mb-xl-2 mb-2">
                   <div class="card h-100">
                     <div class="card-body p-3">
                       <a href="{url_export}" target="_blank">
@@ -614,9 +626,11 @@ def main():
         
         conteo    = 0
         graph     = ""
-        colorgen  = ['rgba(0, 63, 45, 0.9)', 'rgba(0, 73, 53, 0.7)', 'rgba(0, 83, 61, 0.5)', 'rgba(0, 93, 69, 0.3)', 'rgba(0, 103, 77, 0.1)']
-        coloredad = ['rgba(0, 0, 128, 0.8)', 'rgba(0, 0, 139, 0.8)', 'rgba(0, 0, 205, 0.8)', 'rgba(65, 105, 225, 0.8)', 'rgba(70, 130, 180, 0.8)', 'rgba(135, 206, 235, 0.8)', 'rgba(173, 216, 230, 0.8)', 'rgba(240, 248, 255, 0.8)', 'rgba(255, 255, 255, 0.8)']
-        
+        colorgen  = ['#012a2d']
+        coloredad = ['#80bbad']
+        #colorgen  = ['rgba(0, 63, 45, 0.9)', 'rgba(0, 73, 53, 0.7)', 'rgba(0, 83, 61, 0.5)', 'rgba(0, 93, 69, 0.3)', 'rgba(0, 103, 77, 0.1)']
+        #coloredad = ['rgba(0, 0, 128, 0.8)', 'rgba(0, 0, 139, 0.8)', 'rgba(0, 0, 205, 0.8)', 'rgba(65, 105, 225, 0.8)', 'rgba(70, 130, 180, 0.8)', 'rgba(135, 206, 235, 0.8)', 'rgba(173, 216, 230, 0.8)', 'rgba(240, 248, 255, 0.8)', 'rgba(255, 255, 255, 0.8)']
+
         lista = [
             {'labels':df['year'].to_list(),'values':df['transacciones'].to_list(),'titulo':'Número de transacciones por año','colors':colorgen},
             {'labels':df['year'].to_list(),'values':df['valor'].to_list(),'titulo':'Valor de las transacciones por año','colors':coloredad},
@@ -787,176 +801,235 @@ def main():
     #-------------------------------------------------------------------------#
     # Data censo del dane
     #-------------------------------------------------------------------------#  
-    if st.session_state.polygonfilter is not None:
-        html = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-icons.css" rel="stylesheet" />
-          <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-svg.css" rel="stylesheet" />
-          <link id="pagestyle" href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/soft-ui-dashboard.css?v=1.0.7" rel="stylesheet" />
-        </head>
-        <body>
-        <div class="container-fluid py-1" style="margin-bottom: 30px;">
-          <div class="row">
-            <div class="col-xl-12 col-sm-12 mb-xl-0 mb-2">
-              <div class="card">
-                <div class="card-body p-3">
-                  <div class="row">
-                    <div class="numbers">
-                      <h3 class="font-weight-bolder mb-0" style="text-align: center;font-size: 1.5rem;">Datos demográficos</h3>
+    if st.session_state.secion_filtro and st.session_state.polygonfilter is not None:
+        datacensodane = censodane(str(st.session_state.polygonfilter))
+        if datacensodane.empty is False:
+            html = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-icons.css" rel="stylesheet" />
+              <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-svg.css" rel="stylesheet" />
+              <link id="pagestyle" href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/soft-ui-dashboard.css?v=1.0.7" rel="stylesheet" />
+            </head>
+            <body>
+            <div class="container-fluid py-1" style="margin-bottom: 30px;">
+              <div class="row">
+                <div class="col-xl-12 col-sm-12 mb-xl-0 mb-2">
+                  <div class="card">
+                    <div class="card-body p-3">
+                      <div class="row">
+                        <div class="numbers">
+                          <h3 class="font-weight-bolder mb-0" style="text-align: center;font-size: 1.5rem;">Datos demográficos</h3>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-        </body>
-        </html>        
-        """
-        texto = BeautifulSoup(html, 'html.parser')
-        st.markdown(texto, unsafe_allow_html=True)         
-        datacensodane = censodane(str(st.session_state.polygonfilter))
-        
-        conteo    = 0
-        graph     = ""
-        vargen    = ['Total viviendas','Hogares','Total personas','Hombres','Mujeres']
-        varedad   = ['0 a 9 años', '10 a 19 años', '20 a 29 años', '30 a 39 años', '40 a 49 años', '50 a 59 años', '60 a 69 años', '70 a 79 años', '80 años o más']
-        colorgen  = ['rgba(0, 63, 45, 0.9)', 'rgba(0, 73, 53, 0.7)', 'rgba(0, 83, 61, 0.5)', 'rgba(0, 93, 69, 0.3)', 'rgba(0, 103, 77, 0.1)']
-        coloredad = ['rgba(0, 0, 128, 0.8)', 'rgba(0, 0, 139, 0.8)', 'rgba(0, 0, 205, 0.8)', 'rgba(65, 105, 225, 0.8)', 'rgba(70, 130, 180, 0.8)', 'rgba(135, 206, 235, 0.8)', 'rgba(173, 216, 230, 0.8)', 'rgba(240, 248, 255, 0.8)', 'rgba(255, 255, 255, 0.8)']
-        
-        lista = [
-            {'labels':vargen,'values':datacensodane[vargen].iloc[0].to_list(),'titulo':'Cifras generales','colors':colorgen},
-            {'labels':varedad,'values':datacensodane[varedad].iloc[0].to_list(),'titulo':'Por rango de edad','colors':coloredad},
-                 ]
-        
-        for item in lista:
-            conteo     += 1
-
-            graph += f'''
-            const labels{conteo} = {item['labels']};
-            const data{conteo} = {item['values']};
-            const backgroundColors{conteo} =  {item['colors']};
-            const ctx{conteo} = document.getElementById('chart{conteo}').getContext('2d');
+            </body>
+            </html>        
+            """
+            texto = BeautifulSoup(html, 'html.parser')
+            st.markdown(texto, unsafe_allow_html=True)         
             
-            new Chart(ctx{conteo}, {{
-                type: 'bar',
-                data: {{
-                    labels: labels{conteo},
-                    datasets: [{{
-                        label: '{item['titulo']}',
-                        data: data{conteo},
-                        backgroundColor: backgroundColors{conteo},
-                        borderWidth: 0
-                    }}]
-                }},
-                options: {{                   
-                    scales: {{
-                        x: {{
-                            grid: {{
-                                display: false
-                            }}
-                        }},
-                        y: {{
-                            beginAtZero: true,
-                            ticks: {{
-                                callback: function(value) {{
-                                    return value;
-                                }}
-                            }}
-                        }}
+            
+            conteo    = 0
+            graph     = ""
+            vargen    = ['Total viviendas','Hogares','Total personas','Hombres','Mujeres']
+            varedad   = ['0 a 9 años', '10 a 19 años', '20 a 29 años', '30 a 39 años', '40 a 49 años', '50 a 59 años', '60 a 69 años', '70 a 79 años', '80 años o más']
+            colorgen  = ['#012a2d']
+            coloredad = ['#80bbad']
+            #colorgen  = ['rgba(0, 63, 45, 0.9)', 'rgba(0, 73, 53, 0.7)', 'rgba(0, 83, 61, 0.5)', 'rgba(0, 93, 69, 0.3)', 'rgba(0, 103, 77, 0.1)']
+            #coloredad = ['rgba(0, 0, 128, 0.8)', 'rgba(0, 0, 139, 0.8)', 'rgba(0, 0, 205, 0.8)', 'rgba(65, 105, 225, 0.8)', 'rgba(70, 130, 180, 0.8)', 'rgba(135, 206, 235, 0.8)', 'rgba(173, 216, 230, 0.8)', 'rgba(240, 248, 255, 0.8)', 'rgba(255, 255, 255, 0.8)']
+
+
+            lista = [
+                {'labels':vargen,'values':datacensodane[vargen].iloc[0].to_list(),'titulo':'Cifras generales','colors':colorgen},
+                {'labels':varedad,'values':datacensodane[varedad].iloc[0].to_list(),'titulo':'Por rango de edad','colors':coloredad},
+                     ]
+            
+            for item in lista:
+                conteo     += 1
+    
+                graph += f'''
+                const labels{conteo} = {item['labels']};
+                const data{conteo} = {item['values']};
+                const backgroundColors{conteo} =  {item['colors']};
+                const ctx{conteo} = document.getElementById('chart{conteo}').getContext('2d');
+                
+                new Chart(ctx{conteo}, {{
+                    type: 'bar',
+                    data: {{
+                        labels: labels{conteo},
+                        datasets: [{{
+                            label: '{item['titulo']}',
+                            data: data{conteo},
+                            backgroundColor: backgroundColors{conteo},
+                            borderWidth: 0
+                        }}]
                     }},
-                    plugins: {{
-                        tooltip: {{
-                            callbacks: {{
-                                label: function(context) {{
-                                    return context.parsed.y;
+                    options: {{                   
+                        scales: {{
+                            x: {{
+                                grid: {{
+                                    display: false
+                                }}
+                            }},
+                            y: {{
+                                beginAtZero: true,
+                                ticks: {{
+                                    callback: function(value) {{
+                                        return value;
+                                    }}
                                 }}
                             }}
                         }},
-                        datalabels: {{
-                            anchor: 'end', 
-                            align: 'end', 
-                            font: {{ size: 12, weight: 'bold' }}, 
-                            color: 'black', 
-                            formatter: function(value) {{
-                                return value; // Esta función muestra el valor de la barra
-                            }}                            
+                        plugins: {{
+                            tooltip: {{
+                                callbacks: {{
+                                    label: function(context) {{
+                                        return context.parsed.y;
+                                    }}
+                                }}
+                            }},
+                            datalabels: {{
+                                anchor: 'end', 
+                                align: 'end', 
+                                font: {{ size: 12, weight: 'bold' }}, 
+                                color: 'black', 
+                                formatter: function(value) {{
+                                    return value; // Esta función muestra el valor de la barra
+                                }}                            
+                            }}
                         }}
                     }}
-                }}
-            }});
-            '''
-        graph = BeautifulSoup(graph, 'html.parser')
-        style = """
-        <style>
-            .chart-container {
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              height: 100%;
-              width: 100%; 
-              margin-top:100px;
-            }
-            body {
-                font-family: Arial, sans-serif;
-            }
-            
-            canvas {
-                max-width: 100%;
-                max-height: 100%;
-                max-height: 300px;
-            }
-        </style>
-        """
-        html = f"""
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-icons.css" rel="stylesheet" />
-            <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-svg.css" rel="stylesheet" />
-            <link id="pagestyle" href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/soft-ui-dashboard.css?v=1.0.7" rel="stylesheet" />
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            {style}
-        </head>
-        <body>
-        <div class="container-fluid py-0" style="margin-bottom: 0px;">
-          <div class="row">     
-            <div class="col-md-12 col-lg-6 mb-3">
-              <div class="card h-100">
-                <div class="card-body p-3">  
-                  <div class="numbers">
-                    <div class="chart chart-container">
-                      <canvas id="chart1"></canvas>
-                    </div> 
-                  </div>                      
+                }});
+                '''
+            graph = BeautifulSoup(graph, 'html.parser')
+            style = """
+            <style>
+                .chart-container {
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  height: 100%;
+                  width: 100%; 
+                  margin-top:100px;
+                }
+                body {
+                    font-family: Arial, sans-serif;
+                }
+                
+                canvas {
+                    max-width: 100%;
+                    max-height: 100%;
+                    max-height: 300px;
+                }
+            </style>
+            """
+            html = f"""
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-icons.css" rel="stylesheet" />
+                <link href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/nucleo-svg.css" rel="stylesheet" />
+                <link id="pagestyle" href="https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/css/soft-ui-dashboard.css?v=1.0.7" rel="stylesheet" />
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                {style}
+            </head>
+            <body>
+            <div class="container-fluid py-0" style="margin-bottom: 0px;">
+              <div class="row">     
+                <div class="col-md-12 col-lg-6 mb-3">
+                  <div class="card h-100">
+                    <div class="card-body p-3">  
+                      <div class="numbers">
+                        <div class="chart chart-container">
+                          <canvas id="chart1"></canvas>
+                        </div> 
+                      </div>                      
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="col-md-12 col-lg-6 mb-3">
+                  <div class="card h-100">
+                    <div class="card-body p-3">  
+                      <div class="numbers">  
+                        <div class="chart chart-container">
+                          <canvas id="chart2"></canvas>
+                        </div> 
+                      </div>                     
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+            <script>
+            {graph}
+            </script>
+            </body>
+            </html>
+            """
+            st.components.v1.html(html, height=500)
+            #st.write(str(BeautifulSoup(html, 'html.parser').prettify()))
+            #st.dataframe(datacensodane)
             
-            <div class="col-md-12 col-lg-6 mb-3">
-              <div class="card h-100">
-                <div class="card-body p-3">  
-                  <div class="numbers">  
-                    <div class="chart chart-container">
-                      <canvas id="chart2"></canvas>
-                    </div> 
-                  </div>                     
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+            
+    #-------------------------------------------------------------------------#
+    # Descargar data
+    #-------------------------------------------------------------------------#  
+
+    col1, col2 = st.columns(2)
+    with col1:
+        csv = convert_df(st.session_state.datashd_origen)     
+        st.download_button(
+           "Descargar datos de propietarios",
+           csv,
+           "data_propietarios.csv",
+           "text/csv",
+           key='data_propietarios'
+        )
+        components.html(
+            """
         <script>
-        {graph}
+        const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
+        elements[0].style.width = '100%';
+        elements[0].style.fontWeight = 'bold';
+        elements[0].style.backgroundColor = '#17e88f';
         </script>
-        </body>
-        </html>
         """
-        st.components.v1.html(html, height=500)
-        #st.write(str(BeautifulSoup(html, 'html.parser').prettify()))
-        #st.dataframe(datacensodane)
+        )
+    with col2:
+        csv = convert_df(st.session_state.datasnr_origen)     
+        st.download_button(
+           "Descargar datos de transacciones",
+           csv,
+           "data_transacciones.csv",
+           "text/csv",
+           key='data_transacciones'
+        )
+        components.html(
+            """
+        <script>
+        const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
+        elements[1].style.width = '100%';
+        elements[1].style.fontWeight = 'bold';
+        elements[1].style.backgroundColor = '#17e88f';
+        </script>
+        """
+        )        
+        
+    #if st.session_state.datacatastro.empty is False:
+    #    st.dataframe(st.session_state.datacatastro)
+    #if st.session_state.datashd_origen.empty is False:
+    #    idd = st.session_state.datashd_origen['chip'].isin(st.session_state.datacatastro['prechip'])
+    #    st.dataframe(st.session_state.datashd_origen[idd])
+    #if st.session_state.datasnr_origen.empty is False:
+    #    idd = st.session_state.datasnr_origen['chip'].isin(st.session_state.datacatastro['prechip'])
+    #    st.dataframe(st.session_state.datasnr_origen[idd])

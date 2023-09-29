@@ -3,6 +3,8 @@ import pdfcrowd
 import pandas as pd
 import re
 import folium
+import streamlit.components.v1 as components
+
 from streamlit_folium import st_folium
 from bs4 import BeautifulSoup
 from sqlalchemy import create_engine
@@ -106,6 +108,7 @@ else:
     col1, col2,col3 = st.columns([3,1,1])
     with col2:
         if st.button('Generar Ficha en PDF'):
+            
             with st.spinner("Generando PDF"):
                 if st.session_state.html_pdf is not None:
                     fd, temp_path     = tempfile.mkstemp(suffix=".html")
@@ -123,8 +126,22 @@ else:
                                             data=PDFbyte,
                                             file_name=f"ficha-codigo-{code}.pdf",
                                             mime='application/octet-stream')
-            
-    
+        
+        components.html(
+            """
+        <script>
+        const elements = window.parent.document.querySelectorAll('.stButton button')
+        elements[0].style.backgroundColor = '#003f2d';
+        elements[0].style.fontWeight = 'bold';
+        elements[0].style.color = 'white';
+        elements[0].style.width = '100%';
+        const elements1 = window.parent.document.querySelectorAll('.stDownloadButton button')
+        elements1[0].style.width = '100%';
+        elements1[0].style.fontWeight = 'bold';
+        elements1[0].style.backgroundColor = '#17e88f';
+        </script>
+        """
+        )
     data_inmueble = st.session_state.data_ficha.iloc[0]
 
     #-------------------------------------------------------------------------#
@@ -175,7 +192,18 @@ else:
         else: valoradministracion = ""
     except: valoradministracion = ""
     
-    caracteristicas = f'<strong>{areaconstruida}</strong> mt<sup>2</sup> | <strong>{habitaciones}</strong> habitaciones | <strong>{banos}</strong> baños | <strong>{garajes}</strong> garajes'
+    caracteristicas = ''
+    if isinstance(areaconstruida, float) or isinstance(areaconstruida, int):
+        caracteristicas += f'<strong>{areaconstruida}</strong> mt<sup>2</sup> | '
+    if isinstance(habitaciones, float) or isinstance(habitaciones, int):
+        caracteristicas += f'<strong>{habitaciones}</strong> habitaciones | '
+    if isinstance(banos, float) or isinstance(banos, int):
+        caracteristicas += f'<strong>{banos}</strong> baños | '                
+    if isinstance(garajes, float) or isinstance(garajes, int):
+        caracteristicas += f'<strong>{garajes}</strong> garajes'
+    if caracteristicas!='':
+        caracteristicas = caracteristicas.strip().strip('|').strip()
+        
     try:
         descripcion     = data_inmueble['descripcion']
         descripcion     = homogenizar_texto(descripcion)

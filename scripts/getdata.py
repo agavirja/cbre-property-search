@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import re
 import json
 import requests
@@ -10,6 +11,7 @@ from shapely.geometry import Polygon,Point,mapping,shape
 from unidecode import unidecode
 from io import BytesIO
 from PIL import Image
+from multiprocessing.dummy import Pool
 
 from scripts.formato_direccion import formato_direccion
 
@@ -25,44 +27,70 @@ def getdatacapital(polygon):
     host     = st.secrets["host_bigdata"]
     schema   = st.secrets["schema_bigdata"]
     
-    engine     = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
-    datapoints = pd.read_sql_query(f"SELECT lotcodigo FROM  bigdata.data_bogota_lotes_point WHERE ST_CONTAINS(ST_GEOMFROMTEXT('{polygon}'), POINT(longitud, latitud))" , engine)
-    query      = '(lotcodigo="'+'" OR lotcodigo="'.join(datapoints['lotcodigo'].unique())+'")'
-    dataimport = pd.read_sql_query(f"SELECT lotcodigo as barmanpre, ST_AsText(geometry) as wkt FROM  bigdata.data_bogota_lotes WHERE {query}" , engine)
-    query      = '(barmanpre="'+'" OR barmanpre="'.join(datapoints['lotcodigo'].unique())+'")'
-    # Remover vias
-    datacatastro = pd.read_sql_query(f"SELECT  barmanpre  FROM  bigdata.data_bogota_catastro WHERE precdestin IN ('65','66') AND {query}" , engine)
-    idd          = dataimport['barmanpre'].isin(datacatastro['barmanpre'])
-    if sum(idd)>0:
-        dataimport = dataimport[~idd]
+    engine       = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
+    datapoints   = pd.read_sql_query(f"SELECT lotcodigo FROM  bigdata.data_bogota_lotes_point WHERE ST_CONTAINS(ST_GEOMFROMTEXT('{polygon}'), POINT(longitud, latitud))" , engine)
+    dataimport   = pd.DataFrame()
+    datacatastro = pd.DataFrame()
+    datashd      = pd.DataFrame()
+    if datapoints.empty is False:
+        query      = "','".join(datapoints['lotcodigo'].unique())
+        query      = f" lotcodigo IN ('{query}')"        
+        dataimport = pd.read_sql_query(f"SELECT lotcodigo as barmanpre, ST_AsText(geometry) as wkt FROM  bigdata.data_bogota_lotes WHERE {query}" , engine)
+
+        # Remover vias
+        query               = "','".join(datapoints['lotcodigo'].unique())
+        query               = f" barmanpre IN ('{query}')"          
+        datacatastro_novias = pd.read_sql_query(f"SELECT  barmanpre  FROM  bigdata.data_bogota_catastro WHERE precdestin IN ('65','66') AND {query}" , engine)
+        idd          = dataimport['barmanpre'].isin(datacatastro_novias['barmanpre'])
+        if sum(idd)>0:
+            dataimport = dataimport[~idd]
     
     # Data catastro
-    datacatastro = pd.read_sql_query(f"SELECT id,precbarrio,prenbarrio,prechip,predirecc,preaterre,preaconst,precdestin,precuso,preuvivien,preusoph,prevetustz,barmanpre,latitud,longitud,coddir,piso,estrato  FROM  bigdata.data_bogota_catastro WHERE (precdestin<>'65') AND {query}" , engine)
-    dataprecuso,dataprecdestin = getuso_destino()
-    dataprecuso.rename(columns={'codigo':'precuso','tipo':'usosuelo','descripcion':'desc_usosuelo'},inplace=True)
-    dataprecdestin.rename(columns={'codigo':'precdestin','tipo':'actividad','descripcion':'desc_actividad'},inplace=True)
-    datacatastro = datacatastro.merge(dataprecuso,on='precuso',how='left',validate='m:1')
-    datacatastro = datacatastro.merge(dataprecdestin,on='precdestin',how='left',validate='m:1')
-    datacatastro['formato_direccion'] = datacatastro['predirecc'].apply(lambda x: formato_direccion(x))
-    for i in ['preaconst','preaterre']:
-        idd = datacatastro[i].isnull()
-        if sum(idd)>0:
-            datacatastro.loc[idd,i] = 0
-    datagrupada = groupcatastro(datacatastro)
-    dataimport  = dataimport.merge(datagrupada,on='barmanpre',how='left',validate='m:1')
+    if dataimport.empty is False:
+        query        = "','".join(dataimport['barmanpre'].unique())
+        query        = f" barmanpre IN ('{query}')" 
+        datacatastro = pd.read_sql_query(f"SELECT id,precbarrio,prenbarrio,prechip,predirecc,preaterre,preaconst,precdestin,precuso,preuvivien,preusoph,prevetustz,barmanpre,latitud,longitud,coddir,piso,estrato  FROM  bigdata.data_bogota_catastro WHERE {query} AND (precdestin<>'65')" , engine)
+        dataprecuso,dataprecdestin = getuso_destino()
+        dataprecuso.rename(columns={'codigo':'precuso','tipo':'usosuelo','descripcion':'desc_usosuelo'},inplace=True)
+        dataprecdestin.rename(columns={'codigo':'precdestin','tipo':'actividad','descripcion':'desc_actividad'},inplace=True)
+        datacatastro = datacatastro.merge(dataprecuso,on='precuso',how='left',validate='m:1')
+        datacatastro = datacatastro.merge(dataprecdestin,on='precdestin',how='left',validate='m:1')
+        datacatastro['formato_direccion'] = datacatastro['predirecc'].apply(lambda x: formato_direccion(x))
+        for i in ['preaconst','preaterre']:
+            idd = datacatastro[i].isnull()
+            if sum(idd)>0:
+                datacatastro.loc[idd,i] = 0
+        datagrupada = groupcatastro(datacatastro)
+        dataimport  = dataimport.merge(datagrupada,on='barmanpre',how='left',validate='m:1')
     engine.dispose()
     
     # Data shd
-    datashd      = getdatacapital_sdh(list(datacatastro['prechip'].unique()))
-    datashdmerge = datashd.copy()
-    datashdmerge = datashdmerge[datashdmerge['valorAutoavaluo']>0]
-    datashdmerge = datashdmerge.sort_values(by=['chip','vigencia','valorAutoavaluo'],ascending=False)
-    datashdmerge = datashdmerge.groupby('chip').agg({'valorAutoavaluo':'first','valorImpuesto':'first'}).reset_index()
-    datashdmerge.columns = ['prechip','avaluocatastral','predial']
-    datacatastro = datacatastro.merge(datashdmerge,on='prechip',how='left',validate='m:1')
-    datacatastro['avaluoxmt2']  = datacatastro['avaluocatastral']/datacatastro['preaconst']
-    datacatastro['predialxmt2'] = datacatastro['predial']/datacatastro['preaconst']
+    if datacatastro.empty is False:
+        datashd      = getdatacapital_sdh(list(datacatastro['prechip'].unique()))
+        datashdmerge = datashd.copy()
+        datashdmerge = datashdmerge[datashdmerge['valorAutoavaluo']>0]
+        datashdmerge = datashdmerge.sort_values(by=['chip','vigencia','valorAutoavaluo'],ascending=False)
+        datashdmerge = datashdmerge.groupby('chip').agg({'valorAutoavaluo':'first','valorImpuesto':'first'}).reset_index()
+        datashdmerge.columns = ['prechip','avaluocatastral','predial']
+        datacatastro = datacatastro.merge(datashdmerge,on='prechip',how='left',validate='m:1')
+        datacatastro['avaluoxmt2']  = datacatastro['avaluocatastral']/datacatastro['preaconst']
+        datacatastro['predialxmt2'] = datacatastro['predial']/datacatastro['preaconst']
 
+    # Data owner
+    if datashd.empty is False:
+        searchby = datashd[datashd['nroIdentificacion'].notnull()]
+        if searchby.empty is False:
+            searchby['nroIdentificacion'] = searchby['nroIdentificacion'].astype(str)
+            dataowner = getdataowner(list(searchby['nroIdentificacion'].unique()))
+        if dataowner.empty is False:
+            datashd   = datashd.merge(dataowner,on='nroIdentificacion',how='outer')
+        datashd = datashd.sort_values(by=['chip','vigencia','tipoPropietario','tipoDocumento'],ascending=False)
+        
+    # Data SNR
+    datasnr = getdatasnr(polygon)
+    
+    # Match propietarios SNR y SHD
+    datashd = match_snr_shd_owner(datashd.copy(),datasnr.copy())
     
     st.session_state.datalotes                 = copy.deepcopy(dataimport)
     st.session_state.datalotes.index           = range(len(st.session_state.datalotes))
@@ -76,6 +104,9 @@ def getdatacapital(polygon):
     st.session_state.datashd.index             = range(len(st.session_state.datashd))
     st.session_state.datashd_origen            = copy.deepcopy(datashd)
     st.session_state.datashd_origen.index      = range(len(st.session_state.datashd_origen))
+    st.session_state.datasnr_origen            = copy.deepcopy(datasnr)
+    st.session_state.datasnr_origen.index      = range(len(st.session_state.datasnr_origen))
+
     st.session_state.zoom_start    = 16
     st.session_state.secion_filtro = True
     
@@ -90,9 +121,6 @@ def getdatacapital(polygon):
     st.session_state.datamarket       = pd.concat([datamarket_venta,datamarket_arriendo])
     st.session_state.datamarket.index = range(len(st.session_state.datamarket))
     engine.dispose()
-    
-    # Data SNR
-    getdatasnr(polygon)
     
     st.experimental_rerun()
     
@@ -140,7 +168,7 @@ def getinfopredioscapital(barmanpre):
             datacatastro.loc[idd,i] = 0
             
     datashd         = getdatacapital_sdh(list(datacatastro[datacatastro['prechip'].notnull()]['prechip'].unique()))
-    datainfopredios =  getdatainfopredio(list(datacatastro[datacatastro['prechip'].notnull()]['prechip'].unique()))
+    datainfopredios = getdatainfopredio(list(datacatastro[datacatastro['prechip'].notnull()]['prechip'].unique()))
     if datashd.empty is False:
         datashdmerge = datashd.copy()
         datashdmerge = datashdmerge[datashdmerge['valorAutoavaluo']>0]
@@ -172,22 +200,32 @@ def getdatacapital_sdh(chip):
     password = st.secrets["password_bigdata"]
     host     = st.secrets["host_bigdata"]
     schema   = st.secrets["schema_bigdata"]
+    engine   = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
+    datashd  = pd.DataFrame()
     
-    query = ''
     if isinstance(chip, list):
-        query = "','".join(chip)
-        query = f" chip IN ('{query}')"
-
+        df       = pd.DataFrame({'chip':chip})
+        df.index = range(len(df))
+        futures  = [] 
+        pool     = Pool(10)
+        batches  = np.array_split(df, len(df) // 1000 + 1)      
+        for batch in batches:
+            futures.append(pool.apply_async(readdata_sdh,args = (engine,batch, )))
+        for future in futures:
+            datashd = datashd.append(future.get())
+            
     elif isinstance(chip, str):
-        query =  'chip="{chip}"'
-
-    datashd = pd.DataFrame()
-    if query!='':
-        engine   = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
-        datashd  = pd.read_sql_query(f"SELECT chip,vigencia,valorAutoavaluo,valorImpuesto,direccionPredio,nroIdentificacion,indPago,idSoporteTributario FROM bigdata.data_bogota_catastro_vigencia WHERE {query}" , engine)
-        engine.dispose()
-        
+        query   =  'chip="{chip}"'
+        datashd = pd.read_sql_query(f"SELECT chip,vigencia,valorAutoavaluo,valorImpuesto,direccionPredio,nroIdentificacion,indPago,idSoporteTributario FROM bigdata.data_bogota_catastro_vigencia WHERE {query}" , engine)
+    
+    engine.dispose()   
     return datashd
+
+def readdata_sdh(engine,batch):
+    query = "','".join(batch['chip'])
+    query = f" chip IN ('{query}')"
+    data  = pd.read_sql_query(f"SELECT chip,vigencia,valorAutoavaluo,valorImpuesto,direccionPredio,nroIdentificacion,indPago,idSoporteTributario FROM bigdata.data_bogota_catastro_vigencia WHERE {query}" , engine)
+    return data
 
 @st.experimental_memo
 def getdatainfopredio(chip):
@@ -215,23 +253,33 @@ def getparam(x,tipo,pos):
     
 @st.experimental_memo
 def getdataowner(identificacion):
-    user     = st.secrets["user_bigdata"]
-    password = st.secrets["password_bigdata"]
-    host     = st.secrets["host_bigdata"]
-    schema   = st.secrets["schema_bigdata"]
-    
-    query = ''
-    if isinstance(identificacion, list):
-        query = '(nroIdentificacion="'+'" OR nroIdentificacion="'.join(identificacion)+'")'
-    elif isinstance(identificacion, str):
-        query =  'nroIdentificacion="{identificacion}"'
-
+    user      = st.secrets["user_bigdata"]
+    password  = st.secrets["password_bigdata"]
+    host      = st.secrets["host_bigdata"]
+    schema    = st.secrets["schema_bigdata"]
+    engine    = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
     dataowner = pd.DataFrame()
-    if query!='':
-        engine    = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}/{schema}')
-        dataowner = pd.read_sql_query(f"SELECT * FROM bigdata.data_bogota_catastro_propietario WHERE {query}" , engine)
-        engine.dispose()
 
+    if isinstance(identificacion, list):
+        df       = pd.DataFrame({'nroIdentificacion':identificacion})
+        df       = df[df['nroIdentificacion'].notnull()]
+        df['nroIdentificacion'] = df['nroIdentificacion'].astype(str)
+        df.index = range(len(df))
+        futures  = [] 
+        pool     = Pool(10)
+        batches  = np.array_split(df, len(df) // 1000 + 1)      
+        for batch in batches:
+            futures.append(pool.apply_async(readdata_owner,args = (engine,batch, )))
+        for future in futures:
+            dataowner = dataowner.append(future.get())
+
+    elif isinstance(identificacion, str):
+        query     = 'nroIdentificacion="{identificacion}"'
+        dataowner = pd.read_sql_query(f"SELECT * FROM bigdata.data_bogota_catastro_propietario WHERE {query}" , engine)
+    
+    engine.dispose()  
+    
+    if dataowner.empty is False:
         for i in [1,2,3,4,5]:
             dataowner[f'telefono{i}'] = dataowner['telefonos'].apply(lambda x: getparam(x,'numero',i-1))
         for i in [1,2,3]:
@@ -239,8 +287,14 @@ def getdataowner(identificacion):
         for i in [1,2,3]:
             dataowner[f'direccion_contacto{i}'] = dataowner['dirContacto'].apply(lambda x: getparam(x,'direccion',i-1))
         dataowner.drop(columns=['telefonos','email','dirContacto','dirContactoNot','aplicaDescuento','naturaleza'],inplace=True)
+
     return dataowner
 
+def readdata_owner(engine,batch):
+    query = "','".join(batch['nroIdentificacion'])
+    query = f" nroIdentificacion IN ('{query}')"
+    data  = pd.read_sql_query(f"SELECT * FROM bigdata.data_bogota_catastro_propietario WHERE {query}" , engine)
+    return data
 
 @st.experimental_memo
 def tipoinmuebl2PrecUso():
@@ -258,15 +312,63 @@ def tipoinmuebl2PrecUso():
         }
     return formato
 
+@st.experimental_memo 
+def match_snr_shd_owner(df1,df2):
+    try:
+        df2['vigencia'] = df2['fecha_documento_publico'].apply(lambda x: date2year(x))
+        if 'fecha_consulta' in df2: del df2['fecha_consulta']
+        variables = [x for x in list(df1) if x in list(df2)]
+        varrename = {}
+        if variables!=[]:
+            for i in variables:
+                if any([w==i for w in ['chip','vigencia']]) is False:
+                    varrename.update({i:f'{i}_match'})
+        if varrename!={}:
+            df2.rename(columns=varrename,inplace=True)
+        
+            variablesmatch = ['chip','vigencia']
+            for key,value in  varrename.items():
+                variablesmatch.append(value)
+            
+            df2 = df2.sort_values(by=['chip','fecha_documento_publico','vigencia'],ascending=False,na_position='last').drop_duplicates(subset=['chip','vigencia'],keep='first')
+            df1 = df1.merge(df2[variablesmatch],on=['chip','vigencia'],how='left',validate='m:1')
+            
+            for i in variables:
+                if i in df1 and f'{i}_match' in df1:
+                    idd = (df1[i].isnull()) & (df1[f'{i}_match'].notnull())
+                    if sum(idd)>0:
+                        df1.loc[idd,i] = df1.loc[idd,f'{i}_match']
+                    del df1[f'{i}_match']
+                    
+            # Reemplazar los valores nulos de las vigencias mayores a la ultima vigencia con informacion no nula
+            w = df1[df1['nroIdentificacion'].notnull()]
+            w = w[['chip','vigencia']]
+            w = w.sort_values(by=['chip','vigencia'],ascending=False)
+            w = w.drop_duplicates(subset='chip',keep='first')
+            w.columns = ['chip','vigenca_max']
+            df1       = df1.merge(w,on='chip',how='left',validate='m:1')
+            idd       = df1['vigencia']>=df1['vigenca_max']
+            parte1    = df1[idd]
+            parte2    = df1[~idd]
+            parte1    = parte1.sort_values(by=['chip','vigencia'],ascending=False)
+            for i in ['nroIdentificacion', 'tipoPropietario', 'tipoDocumento', 'primerNombre', 'segundoNombre', 'primerApellido', 'segundoApellido', 'idSujeto', 'estadoRIT', 'fechaActInscripcion', 'fechaCeseActividadesBogotaS', 'fechaInicioActividadesBogota', 'fechaInscripcion', 'fechaInscripcionD', 'fecharegimenBogota', 'fecharegimenBogotaD', 'indBuzon', 'matriculaMercantil', 'regimenTrib', 'fechaDocumento', 'fechaDocumentoS', 'telefono1', 'telefono2', 'telefono3', 'telefono4', 'telefono5', 'email1', 'email2', 'email3', 'direccion_contacto1', 'direccion_contacto2', 'direccion_contacto3']:
+                parte1[i] = parte1.groupby('chip')[i].fillna(method='bfill')
+            df1 = pd.concat([parte1,parte2])
+            if 'vigenca_max' in df1: del df1['vigenca_max']
+    except: pass
+    return df1
 
-# "https://oficinavirtual.shd.gov.co/barcode/certificacion?idSoporte={i['idSoporteTributario']}"
-
-
+def date2year(x):
+    try: return x.year
+    except: return None
 #-----------------------------------------------------------------------------#
 # DATA SNR
 #-----------------------------------------------------------------------------#
 @st.experimental_memo
 def getdatasnr(polygon):
+    
+    # "https://oficinavirtual.shd.gov.co/barcode/certificacion?idSoporte={i['idSoporteTributario']}"
+
     user     = st.secrets["user_bigdata"]
     password = st.secrets["password_bigdata"]
     host     = st.secrets["host_bigdata"]
@@ -293,8 +395,8 @@ def getdatasnr(polygon):
         colombia_mpio = pd.read_sql_query(f"SELECT mpio_ccdgo FROM  bigdata.colombia_mpio WHERE ST_CONTAINS(geometry,POINT({lng},{lat}))" , engine)
         
         # D:\Dropbox\Empresa\Consultoria Data\GEORREFERENCIACION
-        #data_cod_oficinas  = pd.read_pickle(r'D:\Dropbox\Empresa\Consultoria Data\SCRAPING DATA SNR RECURRENTE\oficina2codigoDANE')
-        data_cod_oficinas  = pd.read_pickle('data/oficina2codigoDANE')
+        data_cod_oficinas  = pd.read_pickle(r'D:\Dropbox\Empresa\Consultoria Data\SCRAPING DATA SNR RECURRENTE\oficina2codigoDANE')
+        #data_cod_oficinas  = pd.read_pickle('data/oficina2codigoDANE')
         data_cod_oficinas  = data_cod_oficinas[data_cod_oficinas['mpio_ccdgo'].isin(colombia_mpio['mpio_ccdgo'])]
         if data_cod_oficinas.empty is False:
             data_cod_oficinas['oficina'] = data_cod_oficinas['oficina'].apply(lambda x: x.lower())
@@ -314,12 +416,14 @@ def getdatasnr(polygon):
                 dataprocesos = dataprocesos.drop_duplicates(subset=['docid','tarifa','cuantia'])
                 query        = "','".join(dataprocesos['docid'].astype(str).unique())
                 query        = f" docid IN ('{query}')"
-                datatable    = pd.read_sql_query(f"SELECT docid, fecha_documento_publico,tipo_documento_publico, numero_documento_publico FROM  bigdata.snr_data_completa WHERE {query}" , engine)
+                datatable    = pd.read_sql_query(f"SELECT docid, fecha_documento_publico,tipo_documento_publico, numero_documento_publico,datos_solicitante FROM  bigdata.snr_data_completa WHERE {query}" , engine)
                 if datatable.empty is False:
                     datatable    = datatable.drop_duplicates(subset='docid')
                     dataprocesos = dataprocesos.merge(datatable,on='docid',how='left',validate='m:1')
                     dataprocesos['fecha_documento_publico'] = pd.to_datetime(dataprocesos['fecha_documento_publico'],errors='coerce')
                     idd           = dataprocesos['fecha_documento_publico'].isnull()
+                    
+                    # Los que tienen fecha nula
                     if sum(idd)>0:
                         query         = "','".join(dataprocesos[idd]['docid'].astype(str).unique())
                         query         = f" docid IN ('{query}')"
@@ -384,17 +488,32 @@ def getdatasnr(polygon):
                             datapoints['formato_direccion'] = datapoints['direccion'].apply(lambda x: formato_direccion(x))
 
                 #-------------------------------------------------------------#
+                # Propietarios
+                if dataprocesos.empty is False:
+                    dataprocesos = snr2owners(dataprocesos.copy())
+                    if 'idSujeto' in dataprocesos:
+                        dataprocesos = dataprocesos.sort_values(by=['docid', 'idSujeto'], na_position='last')
+                    
+                # {'codigo':'first','nombre':'first','tarifa':'first','cuantia':'sum','fecha_documento_publico':'first','tipo_documento_publico':'first','numero_documento_publico':'first'}
+                variables         = {'codigo':'first','nombre':'first','tarifa':'first','cuantia':'sum','fecha_documento_publico':'first','tipo_documento_publico':'first','numero_documento_publico':'first'}
+                include_variables = {'tipoDocumento': 'first', 'nroIdentificacion': 'first', 'tipoPropietario': 'first', 'primerNombre': 'first', 'segundoNombre': 'first', 'primerApellido': 'first', 'segundoApellido': 'first', 'idSujeto': 'first', 'estadoRIT': 'first', 'fechaActInscripcion': 'first', 'fechaCeseActividadesBogotaS': 'first', 'fechaInicioActividadesBogota': 'first', 'fechaInscripcion': 'first', 'fechaInscripcionD': 'first', 'fecharegimenBogota': 'first', 'fecharegimenBogotaD': 'first', 'indBuzon': 'first', 'matriculaMercantil': 'first', 'regimenTrib': 'first', 'fechaDocumento': 'first', 'fechaDocumentoS': 'first', 'fecha_consulta': 'first', 'telefono1': 'first', 'telefono2': 'first', 'telefono3': 'first', 'telefono4': 'first', 'telefono5': 'first', 'email1': 'first', 'email2': 'first', 'email3': 'first', 'direccion_contacto1': 'first', 'direccion_contacto2': 'first', 'direccion_contacto3': 'first'}
+                for key,value in include_variables.items():
+                    if key in dataprocesos:
+                        variables.update({key:value})
+                
+                #-------------------------------------------------------------#
                 # Data completa                           
                 datacompleta = datadocid.merge(datapoints,on='matricula',how='outer')
-                dataprocesos = dataprocesos.groupby('docid').agg({'codigo':'first','nombre':'first','tarifa':'first','cuantia':'sum','fecha_documento_publico':'first','tipo_documento_publico':'first','numero_documento_publico':'first'}).reset_index()
+                vardrop      = [x for x in ['fecha_consulta','codigo'] if x in datacompleta]
+                if vardrop!=[]: datacompleta.drop(columns=vardrop,inplace=True)
+                dataprocesos = dataprocesos.groupby('docid').agg(variables).reset_index()
                 datacompleta = datacompleta.merge(dataprocesos,on='docid',how='left',validate='m:1')
                 datacompleta['url'] =  datacompleta['docid'].apply(lambda x: f'https://radicacion.supernotariado.gov.co/app/static/ServletFilesViewer?docId={x}')
                 datacompleta.index  = range(len(datacompleta))
                 
-    st.session_state.datasnr_origen = copy.deepcopy(datacompleta)
-    st.session_state.datasnr        = copy.deepcopy(datacompleta)
     engine.dispose()
-                
+    return datacompleta
+
 def getEXACTfecha(x):
     result = None
     try:
@@ -431,20 +550,53 @@ def getINfecha(x):
     except: result = None
     return result
  
+@st.experimental_memo
+def snr2owners(df):
+    df['datos_solicitante'] = df['datos_solicitante'].apply(lambda x: data2jsonstruct(x))
+    df['titular']           = df['datos_solicitante'].apply(lambda x: getvalue(x,0))
+    df['email']             = df['datos_solicitante'].apply(lambda x: getvalue(x,1))
+    df['tipoDocumento']     = df['datos_solicitante'].apply(lambda x: getname(x,2))
+    df['nroIdentificacion'] = df['datos_solicitante'].apply(lambda x: getvalue(x,2))
+    df['tipoDocumento']     = df['tipoDocumento'].replace(['cedula de ciudadania','nit','cedula de extranjeria','tarjeta de identidad','pasaporte'], ['C.C.','N.I.T.','C.E.','T.I.','PASAPORTE'])
+    
+    if 'datos_solicitante' in df: del df['datos_solicitante']
+
+    identificacion = df[df['nroIdentificacion'].notnull()]
+    dataowner      = pd.DataFrame()
+    if identificacion.empty is False:
+        identificacion['nroIdentificacion'] = identificacion['nroIdentificacion'].astype(str)
+        dataowner = getdataowner(list(identificacion['nroIdentificacion'].unique()))
+    
+    if dataowner.empty is False:
+        dataowner = dataowner.drop_duplicates(subset=['tipoDocumento','nroIdentificacion'],keep='first')
+        df = df.merge(dataowner,on=['tipoDocumento','nroIdentificacion'],how='left',validate='m:1')
+    return df
+
+def data2jsonstruct(x):
+    try: return json.loads(x)
+    except: return None
+
+def getvalue(x,pos):
+    try: return x[pos]['value']
+    except: return None
+def getname(x,pos):
+    try: return x[pos]['variable']
+    except: return None  
 #-----------------------------------------------------------------------------#
 # DATA DANE
 #-----------------------------------------------------------------------------#
 @st.experimental_memo
 def censodane(polygon):
-    
-    # https://geoportal.dane.gov.co/geovisores/territorio/analisis-cnpv-2018/
-    coordenadas = re.findall(r"(-?\d+\.\d+) (-?\d+\.\d+)", polygon)
-    coordenadas = coordenadas[:-1]
-    coordenadas = ",".join([f"{lon},{lat}" for lon, lat in coordenadas])
-    url = f"https://geoportal.dane.gov.co/laboratorio/serviciosjson/poblacion/20221215-indicadordatospoligonos.php?coordendas={coordenadas}"
-    r   = requests.get(url).json()
-    df  = pd.DataFrame(r)
-    df.rename(columns={'V1': 'Total viviendas', 'V2': 'Uso mixto', 'V3': 'Unidad no residencial', 'V4': 'Lugar especial de alojamiento - LEA', 'V5': 'Industria (uso mixto)', 'V6': 'Comercio (uso mixto)', 'V7': 'Servicios (uso mixto)', 'V8': 'Agropecuario, agroindustrial, foresta (uso mixto)', 'V9': 'Sin información (uso mixto)', 'V10': 'Industria (uso no residencial)', 'V11': 'Comercio (uso no residencial)', 'V12': 'Servicios (uso no residencial)', 'V13': 'Agropecuario, Agroindustrial, Foresta (uso no residencial)', 'V14': 'Institucional (uso no residencial)', 'V15': 'Lote (Unidad sin construcción)', 'V16': 'Parque/ Zona Verde (uso no residencial)', 'V17': 'Minero-Energético (uso no residencial)', 'V18': 'Protección/ Conservación ambiental (uso no residencial)', 'V19': 'En Construcción (uso no residencial)', 'V20': 'Sin información (uso no residencial)', 'V21': 'Viviendas', 'V22': 'Casa', 'V23': 'Apartamento', 'V24': 'Tipo cuarto', 'V25': 'Vivienda tradicional indígena', 'V26': 'Vivienda tradicional étnica (Afrocolombiana, Isleña, Rom)', 'V27': 'Otro (contenedor, carpa, embarcación, vagón, cueva, refugio natural, etc.)', 'V28': 'Ocupada con personas presentes', 'V29': 'Ocupada con todas las personas ausentes', 'V30': 'Vivienda temporal (para vacaciones, trabajo, etc.)', 'V31': 'Desocupada', 'V32': 'Hogares', 'V33': 'A', 'V34': 'B', 'V35': 'Estrato 1', 'V36': 'Estrato 2', 'V37': 'Estrato 3', 'V38': 'Estrato 4', 'V39': 'Estrato 5', 'V40': 'Estrato 6', 'V41': 'No sabe o no tiene estrato', 'V42': 'C', 'V43': 'D', 'V44': 'E', 'V45': 'F', 'V46': 'G', 'V47': 'H', 'V48': 'J', 'V49': 'K', 'V50': 'L', 'V51': 'M', 'V52': 'N', 'V53': 'O', 'V54': 'P', 'V55': 'Q', 'V56': 'Total personas', 'V57': 'Hombres', 'V58': 'Mujeres', 'V59': '0 a 9 años', 'V60': '10 a 19 años', 'V61': '20 a 29 años', 'V62': '30 a 39 años', 'V63': '40 a 49 años', 'V64': '50 a 59 años', 'V65': '60 a 69 años', 'V66': '70 a 79 años', 'V67': '80 años o más', 'V68': 'Ninguno (Educacion)', 'V69': 'Sin Información (Educacion)', 'V70': 'Preescolar - Prejardin, Básica primaria 1 (Educacion)', 'V71': 'Básica secundaria 6, Media tecnica 10, Normalista 10 (Educacion)', 'V72': 'Técnica profesional 1 año, Tecnológica 1 año, Universitario 1 año (Educacion)', 'V73': 'Especialización 1 año, Maestria 1 año, Doctorado 1 año (Educacion)'},inplace=True)
+    try:
+        # https://geoportal.dane.gov.co/geovisores/territorio/analisis-cnpv-2018/
+        coordenadas = re.findall(r"(-?\d+\.\d+) (-?\d+\.\d+)", polygon)
+        coordenadas = coordenadas[:-1]
+        coordenadas = ",".join([f"{lon},{lat}" for lon, lat in coordenadas])
+        url = f"https://geoportal.dane.gov.co/laboratorio/serviciosjson/poblacion/20221215-indicadordatospoligonos.php?coordendas={coordenadas}"
+        r   = requests.get(url,verify=False, timeout=20).json()
+        df  = pd.DataFrame(r)
+        df.rename(columns={'V1': 'Total viviendas', 'V2': 'Uso mixto', 'V3': 'Unidad no residencial', 'V4': 'Lugar especial de alojamiento - LEA', 'V5': 'Industria (uso mixto)', 'V6': 'Comercio (uso mixto)', 'V7': 'Servicios (uso mixto)', 'V8': 'Agropecuario, agroindustrial, foresta (uso mixto)', 'V9': 'Sin información (uso mixto)', 'V10': 'Industria (uso no residencial)', 'V11': 'Comercio (uso no residencial)', 'V12': 'Servicios (uso no residencial)', 'V13': 'Agropecuario, Agroindustrial, Foresta (uso no residencial)', 'V14': 'Institucional (uso no residencial)', 'V15': 'Lote (Unidad sin construcción)', 'V16': 'Parque/ Zona Verde (uso no residencial)', 'V17': 'Minero-Energético (uso no residencial)', 'V18': 'Protección/ Conservación ambiental (uso no residencial)', 'V19': 'En Construcción (uso no residencial)', 'V20': 'Sin información (uso no residencial)', 'V21': 'Viviendas', 'V22': 'Casa', 'V23': 'Apartamento', 'V24': 'Tipo cuarto', 'V25': 'Vivienda tradicional indígena', 'V26': 'Vivienda tradicional étnica (Afrocolombiana, Isleña, Rom)', 'V27': 'Otro (contenedor, carpa, embarcación, vagón, cueva, refugio natural, etc.)', 'V28': 'Ocupada con personas presentes', 'V29': 'Ocupada con todas las personas ausentes', 'V30': 'Vivienda temporal (para vacaciones, trabajo, etc.)', 'V31': 'Desocupada', 'V32': 'Hogares', 'V33': 'A', 'V34': 'B', 'V35': 'Estrato 1', 'V36': 'Estrato 2', 'V37': 'Estrato 3', 'V38': 'Estrato 4', 'V39': 'Estrato 5', 'V40': 'Estrato 6', 'V41': 'No sabe o no tiene estrato', 'V42': 'C', 'V43': 'D', 'V44': 'E', 'V45': 'F', 'V46': 'G', 'V47': 'H', 'V48': 'J', 'V49': 'K', 'V50': 'L', 'V51': 'M', 'V52': 'N', 'V53': 'O', 'V54': 'P', 'V55': 'Q', 'V56': 'Total personas', 'V57': 'Hombres', 'V58': 'Mujeres', 'V59': '0 a 9 años', 'V60': '10 a 19 años', 'V61': '20 a 29 años', 'V62': '30 a 39 años', 'V63': '40 a 49 años', 'V64': '50 a 59 años', 'V65': '60 a 69 años', 'V66': '70 a 79 años', 'V67': '80 años o más', 'V68': 'Ninguno (Educacion)', 'V69': 'Sin Información (Educacion)', 'V70': 'Preescolar - Prejardin, Básica primaria 1 (Educacion)', 'V71': 'Básica secundaria 6, Media tecnica 10, Normalista 10 (Educacion)', 'V72': 'Técnica profesional 1 año, Tecnológica 1 año, Universitario 1 año (Educacion)', 'V73': 'Especialización 1 año, Maestria 1 año, Doctorado 1 año (Educacion)'},inplace=True)
+    except: df = pd.DataFrame()
     return df
 
 #-----------------------------------------------------------------------------#
