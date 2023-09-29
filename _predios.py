@@ -109,7 +109,7 @@ def main():
         draw.add_to(m)
         
         if st.session_state.polygonfilter is not None:
-            st.write(str(st.session_state.polygonfilter))
+            #st.write(str(st.session_state.polygonfilter))
             geojson_data                = mapping(st.session_state.polygonfilter)
             polygon_shape               = shape(geojson_data)
             centroid                    = polygon_shape.centroid
