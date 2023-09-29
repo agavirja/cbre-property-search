@@ -233,9 +233,12 @@ def main():
             """
         <script>
         const elements = window.parent.document.querySelectorAll('.stButton button')
-        elements[0].style.backgroundColor = 'lightblue';
+        elements[0].style.backgroundColor = '#003f2d';
         elements[0].style.fontWeight = 'bold';
+        elements[0].style.color = 'white';
         elements[0].style.width = '100%';
+        elements[1].style.backgroundColor = '#cad1d3';
+        elements[1].style.fontWeight = 'bold';
         elements[1].style.width = '100%';
         </script>
         """

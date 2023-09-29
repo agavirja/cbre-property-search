@@ -212,7 +212,8 @@ def getdatacapital_sdh(chip):
         for batch in batches:
             futures.append(pool.apply_async(readdata_sdh,args = (engine,batch, )))
         for future in futures:
-            datashd = datashd.append(future.get())
+            #datashd = datashd.append(future.get())
+            datashd = pd.concat([datashd,future.get()])
             
     elif isinstance(chip, str):
         query   =  'chip="{chip}"'
@@ -271,7 +272,8 @@ def getdataowner(identificacion):
         for batch in batches:
             futures.append(pool.apply_async(readdata_owner,args = (engine,batch, )))
         for future in futures:
-            dataowner = dataowner.append(future.get())
+            #dataowner = dataowner.append(future.get())
+            dataowner = pd.concat([dataowner,future.get()])
 
     elif isinstance(identificacion, str):
         query     = 'nroIdentificacion="{identificacion}"'
