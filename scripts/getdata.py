@@ -479,15 +479,16 @@ def getdatasnr(polygon):
                                 if sum(idd)>0:
                                     datamerge.loc[idd,i] = datamerge.loc[idd,f'{i}_new']
                                 del datamerge[f'{i}_new']
-                            datapoints = datapoints.merge(datamerge[['merge', 'chip', 'preaconst', 'preaterre', 'prevetustz', 'precuso', 'precdestin','barmanpre']],on='merge',how='left',validate='1:1')
-                            del datapoints['merge']
-                            
-                            dataprecuso,dataprecdestin = getuso_destino()
-                            dataprecuso.rename(columns={'codigo':'precuso','tipo':'usosuelo','descripcion':'desc_usosuelo'},inplace=True)
-                            dataprecdestin.rename(columns={'codigo':'precdestin','tipo':'actividad','descripcion':'desc_actividad'},inplace=True)
-                            datapoints = datapoints.merge(dataprecuso,on='precuso',how='left',validate='m:1')
-                            datapoints = datapoints.merge(dataprecdestin,on='precdestin',how='left',validate='m:1')
-                            datapoints['formato_direccion'] = datapoints['direccion'].apply(lambda x: formato_direccion(x))
+                                
+                    datapoints = datapoints.merge(datamerge[['merge', 'chip', 'preaconst', 'preaterre', 'prevetustz', 'precuso', 'precdestin','barmanpre']],on='merge',how='left',validate='1:1')
+                    del datapoints['merge']
+                    
+                    dataprecuso,dataprecdestin = getuso_destino()
+                    dataprecuso.rename(columns={'codigo':'precuso','tipo':'usosuelo','descripcion':'desc_usosuelo'},inplace=True)
+                    dataprecdestin.rename(columns={'codigo':'precdestin','tipo':'actividad','descripcion':'desc_actividad'},inplace=True)
+                    datapoints = datapoints.merge(dataprecuso,on='precuso',how='left',validate='m:1')
+                    datapoints = datapoints.merge(dataprecdestin,on='precdestin',how='left',validate='m:1')
+                    datapoints['formato_direccion'] = datapoints['direccion'].apply(lambda x: formato_direccion(x))
 
                 #-------------------------------------------------------------#
                 # Propietarios
