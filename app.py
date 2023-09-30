@@ -14,3 +14,6 @@ from bs4 import BeautifulSoup
 # streamlit run D:\Dropbox\Empresa\CBRE\PROYECTO_BUSQUEDA_INMUEBLES\APP\app.py
 # https://streamlit.io/
 # pipreqs --encoding utf-8 "D:\Dropbox\Empresa\CBRE\PROYECTO_BUSQUEDA_INMUEBLES\APP"
+
+
+#st.image('https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/cbre/logoCBRE.png')
