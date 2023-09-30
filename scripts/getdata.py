@@ -398,7 +398,7 @@ def getdatasnr(polygon):
         
         # D:\Dropbox\Empresa\Consultoria Data\GEORREFERENCIACION
         #data_cod_oficinas  = pd.read_pickle(r'D:\Dropbox\Empresa\Consultoria Data\SCRAPING DATA SNR RECURRENTE\oficina2codigoDANE')
-        data_cod_oficinas  = snr2mpio(engine)
+        data_cod_oficinas  = pd.read_sql_query("SELECT * FROM  bigdata.snr_oficina2mpio" , engine)
         data_cod_oficinas  = data_cod_oficinas[data_cod_oficinas['mpio_ccdgo'].isin(colombia_mpio['mpio_ccdgo'])]
         if data_cod_oficinas.empty is False:
             data_cod_oficinas['oficina'] = data_cod_oficinas['oficina'].apply(lambda x: x.lower())
@@ -551,12 +551,7 @@ def getINfecha(x):
                 break
     except: result = None
     return result
- 
-@st.experimental_memo
-def snr2mpio(engine):
-    data = pd.read_sql_query("SELECT * FROM  bigdata.snr_oficina2mpio" , engine)
-    return data
-    
+     
 @st.experimental_memo
 def snr2owners(df):
     df['datos_solicitante'] = df['datos_solicitante'].apply(lambda x: data2jsonstruct(x))
