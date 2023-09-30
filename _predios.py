@@ -999,6 +999,16 @@ def main():
                "text/csv",
                key='data_propietarios'
             )
+            components.html(
+                """
+            <script>
+            const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
+            elements[0].style.width = '100%';
+            elements[0].style.fontWeight = 'bold';
+            elements[0].style.backgroundColor = '#17e88f';
+            </script>
+            """
+            ) 
     if st.session_state.datasnr_origen.empty is False:
         with col2:
             csv = convert_df(st.session_state.datasnr_origen)     
@@ -1009,46 +1019,16 @@ def main():
                "text/csv",
                key='data_transacciones'
             )
-
-components.html(
-    """
-<script>
-const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-elements[0].style.width = '100%';
-elements[0].style.fontWeight = 'bold';
-elements[0].style.backgroundColor = '#17e88f';
-const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-elements[1].style.width = '100%';
-elements[1].style.fontWeight = 'bold';
-elements[1].style.backgroundColor = '#17e88f';
-const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-elements[2].style.width = '100%';
-elements[2].style.fontWeight = 'bold';
-elements[2].style.backgroundColor = '#17e88f';
-const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-elements[3].style.width = '100%';
-elements[3].style.fontWeight = 'bold';
-elements[3].style.backgroundColor = '#17e88f';
-const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-elements[4].style.width = '100%';
-elements[4].style.fontWeight = 'bold';
-elements[4].style.backgroundColor = '#17e88f';
-const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-elements[5].style.width = '100%';
-elements[5].style.fontWeight = 'bold';
-elements[5].style.backgroundColor = '#17e88f';
-const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-elements[6].style.width = '100%';
-elements[6].style.fontWeight = 'bold';
-elements[6].style.backgroundColor = '#17e88f';
-const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-elements[7].style.width = '100%';
-elements[7].style.fontWeight = 'bold';
-elements[7].style.backgroundColor = '#17e88f';
-</script>
-"""
-) 
-            
+            components.html(
+                """
+            <script>
+            const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
+            elements[1].style.width = '100%';
+            elements[1].style.fontWeight = 'bold';
+            elements[1].style.backgroundColor = '#17e88f';
+            </script>
+            """
+            )
         
     #if st.session_state.datacatastro.empty is False:
     #    st.dataframe(st.session_state.datacatastro)

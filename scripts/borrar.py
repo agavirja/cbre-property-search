@@ -1,1 +1,0 @@
-    try: return x.year
