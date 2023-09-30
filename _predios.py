@@ -1003,9 +1003,9 @@ def main():
                 """
             <script>
             const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-            elements[0].style.width = '100%';
-            elements[0].style.fontWeight = 'bold';
-            elements[0].style.backgroundColor = '#17e88f';
+            elements[2].style.width = '100%';
+            elements[2].style.fontWeight = 'bold';
+            elements[2].style.backgroundColor = '#17e88f';
             </script>
             """
             ) 
@@ -1023,9 +1023,9 @@ def main():
                 """
             <script>
             const elements = window.parent.document.querySelectorAll('.stDownloadButton button')
-            elements[1].style.width = '100%';
-            elements[1].style.fontWeight = 'bold';
-            elements[1].style.backgroundColor = '#17e88f';
+            elements[3].style.width = '100%';
+            elements[3].style.fontWeight = 'bold';
+            elements[3].style.backgroundColor = '#17e88f';
             </script>
             """
             )
