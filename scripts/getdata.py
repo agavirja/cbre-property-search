@@ -122,7 +122,7 @@ def getdatacapital(polygon):
     st.session_state.datamarket.index = range(len(st.session_state.datamarket))
     engine.dispose()
     
-    st.rerun
+    st.rerun()
     
 st.cache_data
 def groupcatastro(df):
