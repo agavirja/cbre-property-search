@@ -42,7 +42,7 @@ def funfiltros(filtros):
         idd = st.session_state.datalotes_origen['barmanpre'].isin(st.session_state.datacatastro_origen[idd]['barmanpre'])
         st.session_state.datalotes = st.session_state.datalotes_origen[idd]
                 
-        st.experimental_rerun()
+        st.rerun
 
 def style_function(feature):
     return {
@@ -205,7 +205,7 @@ def main():
             coordenadas   = st_map['all_drawings'][0]['geometry']['coordinates']
             st.session_state.polygonfilter = Polygon(coordenadas[0])
             st.session_state.zoom_start = 16
-            st.experimental_rerun()
+            st.rerun
            
     if st.session_state.secion_filtro is False:
         with col2:
@@ -228,7 +228,7 @@ def main():
                         if key in st.session_state:
                             del st.session_state[key]
                             st.session_state[key] = value
-                    st.experimental_rerun()
+                    st.rerun
         components.html(
             """
         <script>
@@ -309,7 +309,7 @@ def main():
                         if key in st.session_state:
                             del st.session_state[key]
                             st.session_state[key] = value
-                    st.experimental_rerun()
+                    st.rerun
         components.html(
             """
         <script>

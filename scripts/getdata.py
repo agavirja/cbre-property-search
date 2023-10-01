@@ -20,7 +20,7 @@ from scripts.formato_direccion import formato_direccion
 #-----------------------------------------------------------------------------#
 # DATA BOGOTA
 #-----------------------------------------------------------------------------#
-@st.experimental_memo
+st.cache_data
 def getdatacapital(polygon):
     user     = st.secrets["user_bigdata"]
     password = st.secrets["password_bigdata"]
@@ -122,15 +122,15 @@ def getdatacapital(polygon):
     st.session_state.datamarket.index = range(len(st.session_state.datamarket))
     engine.dispose()
     
-    st.experimental_rerun()
+    st.rerun
     
-@st.experimental_memo
+st.cache_data
 def groupcatastro(df):
     df = df.groupby(['barmanpre']).agg({'formato_direccion':'first','barmanpre':'count','prenbarrio':'first','prevetustz':['min','max'],'estrato':'median','preaconst':'sum','preaterre':'sum','usosuelo': lambda x: list(x.unique()),'actividad':lambda x: list(x.unique())}).reset_index()
     df.columns = ['barmanpre','direccion','predios','barrio','antiguedad_min','antiguedad_max','estrato','areaconstruida','areaterreno','usosuelo','actividad']
     return df
 
-@st.experimental_memo
+st.cache_data
 def getuso_destino():
     user     = st.secrets["user_bigdata"]
     password = st.secrets["password_bigdata"]
@@ -143,7 +143,7 @@ def getuso_destino():
     engine.dispose()
     return dataprecuso,dataprecdestin
 
-@st.experimental_memo
+st.cache_data
 def getinfopredioscapital(barmanpre):
     
     user     = st.secrets["user_bigdata"]
@@ -194,7 +194,7 @@ def getinfopredioscapital(barmanpre):
     return datalotes,datacatastro,datashd,datainfopredios
 
 
-@st.experimental_memo
+st.cache_data
 def getdatacapital_sdh(chip):
     user     = st.secrets["user_bigdata"]
     password = st.secrets["password_bigdata"]
@@ -228,7 +228,7 @@ def readdata_sdh(engine,batch):
     data  = pd.read_sql_query(f"SELECT chip,vigencia,valorAutoavaluo,valorImpuesto,direccionPredio,nroIdentificacion,indPago,idSoporteTributario FROM bigdata.data_bogota_catastro_vigencia WHERE {query}" , engine)
     return data
 
-@st.experimental_memo
+st.cache_data
 def getdatainfopredio(chip):
     user     = st.secrets["user_bigdata"]
     password = st.secrets["password_bigdata"]
@@ -252,7 +252,7 @@ def getparam(x,tipo,pos):
     try: return json.loads(x)[pos][tipo]
     except: return None
     
-@st.experimental_memo
+st.cache_data
 def getdataowner(identificacion):
     user      = st.secrets["user_bigdata"]
     password  = st.secrets["password_bigdata"]
@@ -298,7 +298,7 @@ def readdata_owner(engine,batch):
     data  = pd.read_sql_query(f"SELECT * FROM bigdata.data_bogota_catastro_propietario WHERE {query}" , engine)
     return data
 
-@st.experimental_memo
+st.cache_data
 def tipoinmuebl2PrecUso():
     formato = {
         'Apartamento':['001','002','037','038'],
@@ -314,7 +314,7 @@ def tipoinmuebl2PrecUso():
         }
     return formato
 
-@st.experimental_memo 
+st.cache_data 
 def match_snr_shd_owner(df1,df2):
     try:
         df2['vigencia'] = df2['fecha_documento_publico'].apply(lambda x: date2year(x))
@@ -366,7 +366,7 @@ def date2year(x):
 #-----------------------------------------------------------------------------#
 # DATA SNR
 #-----------------------------------------------------------------------------#
-@st.experimental_memo
+st.cache_data
 def getdatasnr(polygon):
     
     # "https://oficinavirtual.shd.gov.co/barcode/certificacion?idSoporte={i['idSoporteTributario']}"
@@ -553,7 +553,7 @@ def getINfecha(x):
     except: result = None
     return result
      
-@st.experimental_memo
+st.cache_data
 def snr2owners(df):
     df['datos_solicitante'] = df['datos_solicitante'].apply(lambda x: data2jsonstruct(x))
     df['titular']           = df['datos_solicitante'].apply(lambda x: getvalue(x,0))
@@ -588,7 +588,7 @@ def getname(x,pos):
 #-----------------------------------------------------------------------------#
 # DATA DANE
 #-----------------------------------------------------------------------------#
-@st.experimental_memo
+st.cache_data
 def censodane(polygon):
     try:
         # https://geoportal.dane.gov.co/geovisores/territorio/analisis-cnpv-2018/
@@ -605,7 +605,7 @@ def censodane(polygon):
 #-----------------------------------------------------------------------------#
 # DATA STREETVIEW
 #-----------------------------------------------------------------------------#
-@st.experimental_memo
+st.cache_data
 def streetviewapi(latitud,longitud):
     API_KEY = 'AIzaSyBEjvAMTg70W6oUvWc5HzYUS3O9rzEI9Jw' #st.secrets["API_KEY"]
     tamaño = "640x480"  # Puedes ajustar el tamaño según tus necesidades
