@@ -15,5 +15,6 @@ from bs4 import BeautifulSoup
 # https://streamlit.io/
 # pipreqs --encoding utf-8 "D:\Dropbox\Empresa\CBRE\PROYECTO_BUSQUEDA_INMUEBLES\APP"
 
+st.set_page_config(page_icon ="https://www.cbre.com/-/media/project/cbre/dotcom/global/unsorted/favicon_lg.png?rev=f6bed35a1dfb4fac9ede077cef213618")
 
-#st.image('https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/cbre/logoCBRE.png')
+st.image('https://personal-data-bucket-online.s3.us-east-2.amazonaws.com/cbre/CBRE_Group-Logo.png')
